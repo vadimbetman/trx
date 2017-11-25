@@ -1,0 +1,1049 @@
+   1              		.cpu arm7tdmi
+   2              		.fpu softvfp
+   3              		.eabi_attribute 20, 1
+   4              		.eabi_attribute 21, 1
+   5              		.eabi_attribute 23, 3
+   6              		.eabi_attribute 24, 1
+   7              		.eabi_attribute 25, 1
+   8              		.eabi_attribute 26, 1
+   9              		.eabi_attribute 30, 4
+  10              		.eabi_attribute 34, 0
+  11              		.eabi_attribute 18, 4
+  12              		.file	"trx.c"
+  13              		.text
+  14              	.Ltext0:
+  15              		.cfi_sections	.debug_frame
+  16              		.global	__aeabi_uidivmod
+  17              		.section	.text.trx_discarded_burst,"ax",%progbits
+  18              		.align	2
+  20              	trx_discarded_burst:
+  21              	.LFB3:
+  22              		.file 1 "apps/trx/trx.c"
+   1:apps/trx/trx.c **** /* TRX implementation of Free Software for Calypso Phone */
+   2:apps/trx/trx.c **** 
+   3:apps/trx/trx.c **** /*
+   4:apps/trx/trx.c ****  * Copyright (C) 2013  Sylvain Munaut <tnt@246tNt.com>
+   5:apps/trx/trx.c ****  *
+   6:apps/trx/trx.c ****  * All Rights Reserved
+   7:apps/trx/trx.c ****  *
+   8:apps/trx/trx.c ****  * This program is free software; you can redistribute it and/or modify
+   9:apps/trx/trx.c ****  * it under the terms of the GNU Affero General Public License as published by
+  10:apps/trx/trx.c ****  * the Free Software Foundation; either version 3 of the License, or
+  11:apps/trx/trx.c ****  * (at your option) any later version.
+  12:apps/trx/trx.c ****  *
+  13:apps/trx/trx.c ****  * This program is distributed in the hope that it will be useful,
+  14:apps/trx/trx.c ****  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  15:apps/trx/trx.c ****  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  16:apps/trx/trx.c ****  * GNU Affero General Public License for more details.
+  17:apps/trx/trx.c ****  *
+  18:apps/trx/trx.c ****  * You should have received a copy of the GNU Affero General Public License
+  19:apps/trx/trx.c ****  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  20:apps/trx/trx.c ****  */
+  21:apps/trx/trx.c **** 
+  22:apps/trx/trx.c **** #include <inttypes.h>
+  23:apps/trx/trx.c **** #include <stdint.h>
+  24:apps/trx/trx.c **** #include <string.h>
+  25:apps/trx/trx.c **** #include <stdio.h>
+  26:apps/trx/trx.c **** 
+  27:apps/trx/trx.c **** #include <defines.h>
+  28:apps/trx/trx.c **** #include <asm/system.h>
+  29:apps/trx/trx.c **** #include <layer1/trx.h>
+  30:apps/trx/trx.c **** 
+  31:apps/trx/trx.c **** #include "burst_queue.h"
+  32:apps/trx/trx.c **** 
+  33:apps/trx/trx.c **** 
+  34:apps/trx/trx.c **** /* Burst queue */
+  35:apps/trx/trx.c **** BURST_QUEUE_STATIC(g_bq, 8, 512, static)
+  36:apps/trx/trx.c **** 
+  37:apps/trx/trx.c **** /* Filler table */
+  38:apps/trx/trx.c **** static struct burst_data fill_tn0[51];
+  39:apps/trx/trx.c **** 
+  40:apps/trx/trx.c **** 
+  41:apps/trx/trx.c **** /* TRX Helpers **************************************************************/
+  42:apps/trx/trx.c **** 
+  43:apps/trx/trx.c **** static void
+  44:apps/trx/trx.c **** trx_init_filler(void)
+  45:apps/trx/trx.c **** {
+  46:apps/trx/trx.c **** 	int i;
+  47:apps/trx/trx.c **** 
+  48:apps/trx/trx.c **** 	for (i=0; i<51; i++) {
+  49:apps/trx/trx.c **** 		if ((i % 51) == 50)
+  50:apps/trx/trx.c **** 			fill_tn0[i].type = BURST_DUMMY;
+  51:apps/trx/trx.c **** 		else if (((i % 51) % 10) == 0)
+  52:apps/trx/trx.c **** 			fill_tn0[i].type = BURST_FB;
+  53:apps/trx/trx.c **** 		else if (((i % 51) % 10) == 1)
+  54:apps/trx/trx.c **** 			fill_tn0[i].type = BURST_SB;
+  55:apps/trx/trx.c **** 		else
+  56:apps/trx/trx.c **** 			fill_tn0[i].type = BURST_DUMMY;
+  57:apps/trx/trx.c **** 	}
+  58:apps/trx/trx.c **** }
+  59:apps/trx/trx.c **** 
+  60:apps/trx/trx.c **** static void
+  61:apps/trx/trx.c **** trx_discarded_burst(struct burst_data *burst,
+  62:apps/trx/trx.c ****                     int head, uint32_t fn, __unused void *data)
+  63:apps/trx/trx.c **** {
+  23              		.loc 1 63 0
+  24              		.cfi_startproc
+  25              		@ Function supports interworking.
+  26              		@ args = 0, pretend = 0, frame = 0
+  27              		@ frame_needed = 0, uses_anonymous_args = 0
+  28              	.LVL0:
+  64:apps/trx/trx.c **** 	/* Only TN=0 */
+  65:apps/trx/trx.c **** 	if (head)
+  29              		.loc 1 65 0
+  30 0000 000051E3 		cmp	r1, #0
+  63:apps/trx/trx.c **** {
+  31              		.loc 1 63 0
+  32 0004 38402DE9 		stmfd	sp!, {r3, r4, r5, lr}
+  33              	.LCFI0:
+  34              		.cfi_def_cfa_offset 16
+  35              		.cfi_offset 3, -16
+  36              		.cfi_offset 4, -12
+  37              		.cfi_offset 5, -8
+  38              		.cfi_offset 14, -4
+  63:apps/trx/trx.c **** {
+  39              		.loc 1 63 0
+  40 0008 0050A0E1 		mov	r5, r0
+  41 000c 0240A0E1 		mov	r4, r2
+  42              		.loc 1 65 0
+  43 0010 0A00001A 		bne	.L1
+  44              	.LVL1:
+  45              	.LBB4:
+  46              	.LBB5:
+  66:apps/trx/trx.c **** 		return;
+  67:apps/trx/trx.c **** 
+  68:apps/trx/trx.c **** 	/* Debug */
+  69:apps/trx/trx.c **** 	printf("STALE BURST %" PRIu32 "\n", fn);
+  47              		.loc 1 69 0
+  48 0014 0210A0E1 		mov	r1, r2
+  49              	.LVL2:
+  50 0018 28009FE5 		ldr	r0, .L4
+  51              	.LVL3:
+  52 001c FEFFFFEB 		bl	printf
+  53              	.LVL4:
+  70:apps/trx/trx.c **** 
+  71:apps/trx/trx.c **** 	/* Still copy to the filler table */
+  72:apps/trx/trx.c **** 	memcpy(&fill_tn0[fn % 51], burst, sizeof(struct burst_data));
+  54              		.loc 1 72 0
+  55 0020 0400A0E1 		mov	r0, r4
+  56 0024 3310A0E3 		mov	r1, #51
+  57 0028 FEFFFFEB 		bl	__aeabi_uidivmod
+  58              	.LVL5:
+  59 002c 18009FE5 		ldr	r0, .L4+4
+  60 0030 1020A0E3 		mov	r2, #16
+  61 0034 010280E0 		add	r0, r0, r1, asl #4
+  62 0038 0510A0E1 		mov	r1, r5
+  63 003c FEFFFFEB 		bl	memcpy
+  64              	.LVL6:
+  65              	.L1:
+  66              	.LBE5:
+  67              	.LBE4:
+  73:apps/trx/trx.c **** }
+  68              		.loc 1 73 0
+  69 0040 3840BDE8 		ldmfd	sp!, {r3, r4, r5, lr}
+  70              	.LVL7:
+  71 0044 1EFF2FE1 		bx	lr
+  72              	.L5:
+  73              		.align	2
+  74              	.L4:
+  75 0048 00000000 		.word	.LC0
+  76 004c 00000000 		.word	.LANCHOR0
+  77              		.cfi_endproc
+  78              	.LFE3:
+  80              		.global	__aeabi_idivmod
+  81              		.section	.text.trx_init,"ax",%progbits
+  82              		.align	2
+  83              		.global	trx_init
+  85              	trx_init:
+  86              	.LFB4:
+  74:apps/trx/trx.c **** 
+  75:apps/trx/trx.c **** 
+  76:apps/trx/trx.c **** /* TRX Interface ************************************************************/
+  77:apps/trx/trx.c **** 
+  78:apps/trx/trx.c **** void
+  79:apps/trx/trx.c **** trx_init(void)
+  80:apps/trx/trx.c **** {
+  87              		.loc 1 80 0
+  88              		.cfi_startproc
+  89              		@ Function supports interworking.
+  90              		@ args = 0, pretend = 0, frame = 0
+  91              		@ frame_needed = 0, uses_anonymous_args = 0
+  92 0000 F8402DE9 		stmfd	sp!, {r3, r4, r5, r6, r7, lr}
+  93              	.LCFI1:
+  94              		.cfi_def_cfa_offset 24
+  95              		.cfi_offset 3, -24
+  96              		.cfi_offset 4, -20
+  97              		.cfi_offset 5, -16
+  98              		.cfi_offset 6, -12
+  99              		.cfi_offset 7, -8
+ 100              		.cfi_offset 14, -4
+  81:apps/trx/trx.c **** 	/* Init burst queue */
+  82:apps/trx/trx.c **** 	bq_reset(&g_bq);
+ 101              		.loc 1 82 0
+ 102 0004 70009FE5 		ldr	r0, .L14
+ 103 0008 FEFFFFEB 		bl	bq_reset
+ 104              	.LVL8:
+  83:apps/trx/trx.c **** 	bq_set_discard_fn(&g_bq, trx_discarded_burst, NULL);
+ 105              		.loc 1 83 0
+ 106 000c 68009FE5 		ldr	r0, .L14
+ 107 0010 68109FE5 		ldr	r1, .L14+4
+ 108 0014 0020A0E3 		mov	r2, #0
+ 109 0018 FEFFFFEB 		bl	bq_set_discard_fn
+ 110              	.LVL9:
+ 111 001c 0040A0E3 		mov	r4, #0
+ 112 0020 5C609FE5 		ldr	r6, .L14+8
+ 113              	.LBB8:
+ 114              	.LBB9:
+  48:apps/trx/trx.c **** 	for (i=0; i<51; i++) {
+ 115              		.loc 1 48 0
+ 116 0024 0450A0E1 		mov	r5, r4
+  56:apps/trx/trx.c **** 			fill_tn0[i].type = BURST_DUMMY;
+ 117              		.loc 1 56 0
+ 118 0028 0270A0E3 		mov	r7, #2
+ 119              	.LVL10:
+ 120              	.L12:
+  49:apps/trx/trx.c **** 		if ((i % 51) == 50)
+ 121              		.loc 1 49 0
+ 122 002c 0500A0E1 		mov	r0, r5
+ 123 0030 3310A0E3 		mov	r1, #51
+ 124 0034 FEFFFFEB 		bl	__aeabi_idivmod
+ 125              	.LVL11:
+ 126 0038 320051E3 		cmp	r1, #50
+  50:apps/trx/trx.c **** 			fill_tn0[i].type = BURST_DUMMY;
+ 127              		.loc 1 50 0
+ 128 003c 0470C607 		streqb	r7, [r6, r4]
+  49:apps/trx/trx.c **** 		if ((i % 51) == 50)
+ 129              		.loc 1 49 0
+ 130 0040 0700000A 		beq	.L8
+  51:apps/trx/trx.c **** 		else if (((i % 51) % 10) == 0)
+ 131              		.loc 1 51 0
+ 132 0044 0100A0E1 		mov	r0, r1
+ 133 0048 0A10A0E3 		mov	r1, #10
+ 134 004c FEFFFFEB 		bl	__aeabi_idivmod
+ 135              	.LVL12:
+ 136 0050 000051E3 		cmp	r1, #0
+ 137 0054 0100000A 		beq	.L13
+  53:apps/trx/trx.c **** 		else if (((i % 51) % 10) == 1)
+ 138              		.loc 1 53 0
+ 139 0058 010051E3 		cmp	r1, #1
+  54:apps/trx/trx.c **** 			fill_tn0[i].type = BURST_SB;
+ 140              		.loc 1 54 0
+ 141 005c 0710A011 		movne	r1, r7
+ 142              	.L13:
+ 143 0060 0410C6E7 		strb	r1, [r6, r4]
+ 144              	.L8:
+  48:apps/trx/trx.c **** 	for (i=0; i<51; i++) {
+ 145              		.loc 1 48 0
+ 146 0064 015085E2 		add	r5, r5, #1
+ 147              	.LVL13:
+ 148 0068 330055E3 		cmp	r5, #51
+ 149 006c 104084E2 		add	r4, r4, #16
+ 150 0070 EDFFFF1A 		bne	.L12
+ 151              	.LBE9:
+ 152              	.LBE8:
+  84:apps/trx/trx.c **** 
+  85:apps/trx/trx.c **** 	/* Init filler table */
+  86:apps/trx/trx.c **** 	trx_init_filler();
+  87:apps/trx/trx.c **** }
+ 153              		.loc 1 87 0
+ 154 0074 F840BDE8 		ldmfd	sp!, {r3, r4, r5, r6, r7, lr}
+ 155              	.LVL14:
+ 156 0078 1EFF2FE1 		bx	lr
+ 157              	.L15:
+ 158              		.align	2
+ 159              	.L14:
+ 160 007c 00000000 		.word	.LANCHOR1
+ 161 0080 00000000 		.word	trx_discarded_burst
+ 162 0084 00000000 		.word	.LANCHOR0
+ 163              		.cfi_endproc
+ 164              	.LFE4:
+ 166              		.section	.text.trx_put_burst,"ax",%progbits
+ 167              		.align	2
+ 168              		.global	trx_put_burst
+ 170              	trx_put_burst:
+ 171              	.LFB5:
+  88:apps/trx/trx.c **** 
+  89:apps/trx/trx.c **** int
+  90:apps/trx/trx.c **** trx_put_burst(uint32_t fn, uint8_t tn, uint8_t type, uint8_t *data)
+  91:apps/trx/trx.c **** {
+ 172              		.loc 1 91 0
+ 173              		.cfi_startproc
+ 174              		@ Function supports interworking.
+ 175              		@ args = 0, pretend = 0, frame = 0
+ 176              		@ frame_needed = 0, uses_anonymous_args = 0
+ 177              	.LVL15:
+ 178 0000 70402DE9 		stmfd	sp!, {r4, r5, r6, lr}
+ 179              	.LCFI2:
+ 180              		.cfi_def_cfa_offset 16
+ 181              		.cfi_offset 4, -16
+ 182              		.cfi_offset 5, -12
+ 183              		.cfi_offset 6, -8
+ 184              		.cfi_offset 14, -4
+ 185              		.loc 1 91 0
+ 186 0004 00C0A0E1 		mov	ip, r0
+ 187 0008 0240A0E1 		mov	r4, r2
+ 188 000c 0360A0E1 		mov	r6, r3
+ 189              	.LBB10:
+  92:apps/trx/trx.c **** 	struct burst_data *burst;
+  93:apps/trx/trx.c **** 	unsigned long flags;
+  94:apps/trx/trx.c **** 
+  95:apps/trx/trx.c **** 	local_firq_save(flags);
+ 190              		.loc 1 95 0
+ 191              	@ 95 "apps/trx/trx.c" 1
+ 192 0010 00500FE1 		mrs	r5, cpsr		@ local_firq_save
+ 193 0014 C03085E3 		orr	r3, r5, #0xC0
+ 194 0018 03F021E1 		msr	cpsr_c, r3
+ 195              	@ 0 "" 2
+ 196              	.LVL16:
+ 197              	.LBE10:
+  96:apps/trx/trx.c **** 
+  97:apps/trx/trx.c **** 	burst = bq_push(&g_bq, tn, fn);
+ 198              		.loc 1 97 0
+ 199 001c 34009FE5 		ldr	r0, .L20
+ 200              	.LVL17:
+ 201 0020 0C20A0E1 		mov	r2, ip
+ 202              	.LVL18:
+ 203 0024 FEFFFFEB 		bl	bq_push
+ 204              	.LVL19:
+  98:apps/trx/trx.c **** 	if (!burst)
+ 205              		.loc 1 98 0
+ 206 0028 000050E3 		cmp	r0, #0
+ 207 002c 0500000A 		beq	.L18
+  99:apps/trx/trx.c **** 		goto exit;
+ 100:apps/trx/trx.c **** 
+ 101:apps/trx/trx.c **** 	burst->type = type;
+ 102:apps/trx/trx.c **** 	if (burst->type == BURST_NB)
+ 208              		.loc 1 102 0
+ 209 0030 030054E3 		cmp	r4, #3
+ 101:apps/trx/trx.c **** 	burst->type = type;
+ 210              		.loc 1 101 0
+ 211 0034 0040C0E5 		strb	r4, [r0]
+ 212              		.loc 1 102 0
+ 103:apps/trx/trx.c **** 		memcpy(burst->data, data, 15);
+ 213              		.loc 1 103 0
+ 214 0038 01008002 		addeq	r0, r0, #1
+ 215              	.LVL20:
+ 216 003c 0610A001 		moveq	r1, r6
+ 217 0040 0F20A003 		moveq	r2, #15
+ 218 0044 FEFFFF0B 		bleq	memcpy
+ 219              	.LVL21:
+ 220              	.L18:
+ 104:apps/trx/trx.c **** 
+ 105:apps/trx/trx.c **** exit:
+ 106:apps/trx/trx.c **** 	local_irq_restore(flags);
+ 221              		.loc 1 106 0
+ 222              	@ 106 "apps/trx/trx.c" 1
+ 223 0048 05F021E1 		msr	cpsr_c, r5		@ local_irq_restore
+ 224              	
+ 225              	@ 0 "" 2
+ 107:apps/trx/trx.c **** 
+ 108:apps/trx/trx.c **** 	return 0;
+ 109:apps/trx/trx.c **** }
+ 226              		.loc 1 109 0
+ 227 004c 0000A0E3 		mov	r0, #0
+ 228 0050 7040BDE8 		ldmfd	sp!, {r4, r5, r6, lr}
+ 229              	.LVL22:
+ 230 0054 1EFF2FE1 		bx	lr
+ 231              	.L21:
+ 232              		.align	2
+ 233              	.L20:
+ 234 0058 00000000 		.word	.LANCHOR1
+ 235              		.cfi_endproc
+ 236              	.LFE5:
+ 238              		.section	.text.trx_get_burst,"ax",%progbits
+ 239              		.align	2
+ 240              		.global	trx_get_burst
+ 242              	trx_get_burst:
+ 243              	.LFB6:
+ 110:apps/trx/trx.c **** 
+ 111:apps/trx/trx.c **** int
+ 112:apps/trx/trx.c **** trx_get_burst(uint32_t fn, uint8_t tn, uint8_t *data)
+ 113:apps/trx/trx.c **** {
+ 244              		.loc 1 113 0
+ 245              		.cfi_startproc
+ 246              		@ Function supports interworking.
+ 247              		@ args = 0, pretend = 0, frame = 0
+ 248              		@ frame_needed = 0, uses_anonymous_args = 0
+ 249              	.LVL23:
+ 250 0000 F8402DE9 		stmfd	sp!, {r3, r4, r5, r6, r7, lr}
+ 251              	.LCFI3:
+ 252              		.cfi_def_cfa_offset 24
+ 253              		.cfi_offset 3, -24
+ 254              		.cfi_offset 4, -20
+ 255              		.cfi_offset 5, -16
+ 256              		.cfi_offset 6, -12
+ 257              		.cfi_offset 7, -8
+ 258              		.cfi_offset 14, -4
+ 259              		.loc 1 113 0
+ 260 0004 0050A0E1 		mov	r5, r0
+ 261 0008 0270A0E1 		mov	r7, r2
+ 114:apps/trx/trx.c **** 	struct burst_data *burst;
+ 115:apps/trx/trx.c **** 	int rc;
+ 116:apps/trx/trx.c **** 
+ 117:apps/trx/trx.c **** 	/* Check for new burst */
+ 118:apps/trx/trx.c **** 	burst = bq_pop_head(&g_bq, tn, fn);
+ 262              		.loc 1 118 0
+ 263 000c 5C009FE5 		ldr	r0, .L26
+ 264              	.LVL24:
+ 265 0010 0520A0E1 		mov	r2, r5
+ 266              	.LVL25:
+ 267 0014 FEFFFFEB 		bl	bq_pop_head
+ 268              	.LVL26:
+ 119:apps/trx/trx.c **** 
+ 120:apps/trx/trx.c **** 	if (burst) {
+ 269              		.loc 1 120 0
+ 270 0018 004050E2 		subs	r4, r0, #0
+ 271 001c 50609FE5 		ldr	r6, .L26+4
+ 121:apps/trx/trx.c **** 		/* New burst: Copy to fill table & use it */
+ 122:apps/trx/trx.c **** 		memcpy(&fill_tn0[fn % 51], burst, sizeof(struct burst_data));
+ 272              		.loc 1 122 0
+ 273 0020 0500A0E1 		mov	r0, r5
+ 274              	.LVL27:
+ 275 0024 3310A0E3 		mov	r1, #51
+ 120:apps/trx/trx.c **** 	if (burst) {
+ 276              		.loc 1 120 0
+ 277 0028 0500000A 		beq	.L23
+ 278              		.loc 1 122 0
+ 279 002c FEFFFFEB 		bl	__aeabi_uidivmod
+ 280              	.LVL28:
+ 281 0030 1020A0E3 		mov	r2, #16
+ 282 0034 010286E0 		add	r0, r6, r1, asl #4
+ 283 0038 0410A0E1 		mov	r1, r4
+ 284 003c FEFFFFEB 		bl	memcpy
+ 285              	.LVL29:
+ 286 0040 010000EA 		b	.L24
+ 287              	.LVL30:
+ 288              	.L23:
+ 123:apps/trx/trx.c **** 
+ 124:apps/trx/trx.c **** 		// printf("O %d %d %p\n", fn, g_bq.used, burst);
+ 125:apps/trx/trx.c **** 	} else {
+ 126:apps/trx/trx.c **** 		/* No data, just use the one from fill table */
+ 127:apps/trx/trx.c **** 		burst = &fill_tn0[fn % 51];
+ 289              		.loc 1 127 0
+ 290 0044 FEFFFFEB 		bl	__aeabi_uidivmod
+ 291              	.LVL31:
+ 292 0048 014286E0 		add	r4, r6, r1, asl #4
+ 293              	.LVL32:
+ 294              	.L24:
+ 128:apps/trx/trx.c **** 	}
+ 129:apps/trx/trx.c **** 
+ 130:apps/trx/trx.c **** 	rc = burst->type;
+ 295              		.loc 1 130 0
+ 296 004c 0050D4E5 		ldrb	r5, [r4]	@ zero_extendqisi2
+ 297              	.LVL33:
+ 131:apps/trx/trx.c **** 	if (burst->type == BURST_NB)
+ 298              		.loc 1 131 0
+ 299 0050 030055E3 		cmp	r5, #3
+ 132:apps/trx/trx.c **** 		memcpy(data, burst->data, 15);
+ 300              		.loc 1 132 0
+ 301 0054 0700A001 		moveq	r0, r7
+ 302 0058 01108402 		addeq	r1, r4, #1
+ 303 005c 0F20A003 		moveq	r2, #15
+ 304 0060 FEFFFF0B 		bleq	memcpy
+ 305              	.LVL34:
+ 306              	.L25:
+ 133:apps/trx/trx.c **** 
+ 134:apps/trx/trx.c **** 	return rc;
+ 135:apps/trx/trx.c **** }
+ 307              		.loc 1 135 0
+ 308 0064 0500A0E1 		mov	r0, r5
+ 309 0068 F840BDE8 		ldmfd	sp!, {r3, r4, r5, r6, r7, lr}
+ 310              	.LVL35:
+ 311 006c 1EFF2FE1 		bx	lr
+ 312              	.L27:
+ 313              		.align	2
+ 314              	.L26:
+ 315 0070 00000000 		.word	.LANCHOR1
+ 316 0074 00000000 		.word	.LANCHOR0
+ 317              		.cfi_endproc
+ 318              	.LFE6:
+ 320              		.section	.rodata.str1.1,"aMS",%progbits,1
+ 321              	.LC0:
+ 322 0000 5354414C 		.ascii	"STALE BURST %lu\012\000"
+ 322      45204255 
+ 322      52535420 
+ 322      256C750A 
+ 322      00
+ 323              		.data
+ 324              		.align	2
+ 325              		.set	.LANCHOR1,. + 0
+ 328              	g_bq:
+ 329 0000 08000000 		.word	8
+ 330 0004 00020000 		.word	512
+ 331 0008 00000000 		.word	0
+ 332 000c 00000000 		.space	8
+ 332      00000000 
+ 333 0014 20000000 		.word	g_bq_head
+ 334 0018 302F0000 		.word	g_bq_freemap
+ 335 001c 30030000 		.word	g_bq_slots
+ 338              	g_bq_head:
+ 339 0020 FFFF     		.short	-1
+ 340 0022 FFFF     		.short	-1
+ 341 0024 FFFF     		.short	-1
+ 342 0026 FFFF     		.short	-1
+ 343 0028 FFFF     		.short	-1
+ 344 002a FFFF     		.short	-1
+ 345 002c FFFF     		.short	-1
+ 346 002e FFFF     		.short	-1
+ 347 0030 FFFF     		.short	-1
+ 348 0032 FFFF     		.short	-1
+ 349 0034 FFFF     		.short	-1
+ 350 0036 FFFF     		.short	-1
+ 351 0038 FFFF     		.short	-1
+ 352 003a FFFF     		.short	-1
+ 353 003c FFFF     		.short	-1
+ 354 003e FFFF     		.short	-1
+ 355 0040 FFFF     		.short	-1
+ 356 0042 FFFF     		.short	-1
+ 357 0044 FFFF     		.short	-1
+ 358 0046 FFFF     		.short	-1
+ 359 0048 FFFF     		.short	-1
+ 360 004a FFFF     		.short	-1
+ 361 004c FFFF     		.short	-1
+ 362 004e FFFF     		.short	-1
+ 363 0050 FFFF     		.short	-1
+ 364 0052 FFFF     		.short	-1
+ 365 0054 FFFF     		.short	-1
+ 366 0056 FFFF     		.short	-1
+ 367 0058 FFFF     		.short	-1
+ 368 005a FFFF     		.short	-1
+ 369 005c FFFF     		.short	-1
+ 370 005e FFFF     		.short	-1
+ 371 0060 FFFF     		.short	-1
+ 372 0062 FFFF     		.short	-1
+ 373 0064 FFFF     		.short	-1
+ 374 0066 FFFF     		.short	-1
+ 375 0068 FFFF     		.short	-1
+ 376 006a FFFF     		.short	-1
+ 377 006c FFFF     		.short	-1
+ 378 006e FFFF     		.short	-1
+ 379 0070 FFFF     		.short	-1
+ 380 0072 FFFF     		.short	-1
+ 381 0074 FFFF     		.short	-1
+ 382 0076 FFFF     		.short	-1
+ 383 0078 FFFF     		.short	-1
+ 384 007a FFFF     		.short	-1
+ 385 007c FFFF     		.short	-1
+ 386 007e FFFF     		.short	-1
+ 387 0080 FFFF     		.short	-1
+ 388 0082 FFFF     		.short	-1
+ 389 0084 FFFF     		.short	-1
+ 390 0086 FFFF     		.short	-1
+ 391 0088 FFFF     		.short	-1
+ 392 008a FFFF     		.short	-1
+ 393 008c FFFF     		.short	-1
+ 394 008e FFFF     		.short	-1
+ 395 0090 FFFF     		.short	-1
+ 396 0092 FFFF     		.short	-1
+ 397 0094 FFFF     		.short	-1
+ 398 0096 FFFF     		.short	-1
+ 399 0098 FFFF     		.short	-1
+ 400 009a FFFF     		.short	-1
+ 401 009c FFFF     		.short	-1
+ 402 009e FFFF     		.short	-1
+ 403 00a0 FFFF     		.short	-1
+ 404 00a2 FFFF     		.short	-1
+ 405 00a4 FFFF     		.short	-1
+ 406 00a6 FFFF     		.short	-1
+ 407 00a8 FFFF     		.short	-1
+ 408 00aa FFFF     		.short	-1
+ 409 00ac FFFF     		.short	-1
+ 410 00ae FFFF     		.short	-1
+ 411 00b0 FFFF     		.short	-1
+ 412 00b2 FFFF     		.short	-1
+ 413 00b4 FFFF     		.short	-1
+ 414 00b6 FFFF     		.short	-1
+ 415 00b8 FFFF     		.short	-1
+ 416 00ba FFFF     		.short	-1
+ 417 00bc FFFF     		.short	-1
+ 418 00be FFFF     		.short	-1
+ 419 00c0 FFFF     		.short	-1
+ 420 00c2 FFFF     		.short	-1
+ 421 00c4 FFFF     		.short	-1
+ 422 00c6 FFFF     		.short	-1
+ 423 00c8 FFFF     		.short	-1
+ 424 00ca FFFF     		.short	-1
+ 425 00cc FFFF     		.short	-1
+ 426 00ce FFFF     		.short	-1
+ 427 00d0 FFFF     		.short	-1
+ 428 00d2 FFFF     		.short	-1
+ 429 00d4 FFFF     		.short	-1
+ 430 00d6 FFFF     		.short	-1
+ 431 00d8 FFFF     		.short	-1
+ 432 00da FFFF     		.short	-1
+ 433 00dc FFFF     		.short	-1
+ 434 00de FFFF     		.short	-1
+ 435 00e0 FFFF     		.short	-1
+ 436 00e2 FFFF     		.short	-1
+ 437 00e4 FFFF     		.short	-1
+ 438 00e6 FFFF     		.short	-1
+ 439 00e8 FFFF     		.short	-1
+ 440 00ea FFFF     		.short	-1
+ 441 00ec FFFF     		.short	-1
+ 442 00ee FFFF     		.short	-1
+ 443 00f0 FFFF     		.short	-1
+ 444 00f2 FFFF     		.short	-1
+ 445 00f4 FFFF     		.short	-1
+ 446 00f6 FFFF     		.short	-1
+ 447 00f8 FFFF     		.short	-1
+ 448 00fa FFFF     		.short	-1
+ 449 00fc FFFF     		.short	-1
+ 450 00fe FFFF     		.short	-1
+ 451 0100 FFFF     		.short	-1
+ 452 0102 FFFF     		.short	-1
+ 453 0104 FFFF     		.short	-1
+ 454 0106 FFFF     		.short	-1
+ 455 0108 FFFF     		.short	-1
+ 456 010a FFFF     		.short	-1
+ 457 010c FFFF     		.short	-1
+ 458 010e FFFF     		.short	-1
+ 459 0110 FFFF     		.short	-1
+ 460 0112 FFFF     		.short	-1
+ 461 0114 FFFF     		.short	-1
+ 462 0116 FFFF     		.short	-1
+ 463 0118 FFFF     		.short	-1
+ 464 011a FFFF     		.short	-1
+ 465 011c FFFF     		.short	-1
+ 466 011e FFFF     		.short	-1
+ 467 0120 FFFF     		.short	-1
+ 468 0122 FFFF     		.short	-1
+ 469 0124 FFFF     		.short	-1
+ 470 0126 FFFF     		.short	-1
+ 471 0128 FFFF     		.short	-1
+ 472 012a FFFF     		.short	-1
+ 473 012c FFFF     		.short	-1
+ 474 012e FFFF     		.short	-1
+ 475 0130 FFFF     		.short	-1
+ 476 0132 FFFF     		.short	-1
+ 477 0134 FFFF     		.short	-1
+ 478 0136 FFFF     		.short	-1
+ 479 0138 FFFF     		.short	-1
+ 480 013a FFFF     		.short	-1
+ 481 013c FFFF     		.short	-1
+ 482 013e FFFF     		.short	-1
+ 483 0140 FFFF     		.short	-1
+ 484 0142 FFFF     		.short	-1
+ 485 0144 FFFF     		.short	-1
+ 486 0146 FFFF     		.short	-1
+ 487 0148 FFFF     		.short	-1
+ 488 014a FFFF     		.short	-1
+ 489 014c FFFF     		.short	-1
+ 490 014e FFFF     		.short	-1
+ 491 0150 FFFF     		.short	-1
+ 492 0152 FFFF     		.short	-1
+ 493 0154 FFFF     		.short	-1
+ 494 0156 FFFF     		.short	-1
+ 495 0158 FFFF     		.short	-1
+ 496 015a FFFF     		.short	-1
+ 497 015c FFFF     		.short	-1
+ 498 015e FFFF     		.short	-1
+ 499 0160 FFFF     		.short	-1
+ 500 0162 FFFF     		.short	-1
+ 501 0164 FFFF     		.short	-1
+ 502 0166 FFFF     		.short	-1
+ 503 0168 FFFF     		.short	-1
+ 504 016a FFFF     		.short	-1
+ 505 016c FFFF     		.short	-1
+ 506 016e FFFF     		.short	-1
+ 507 0170 FFFF     		.short	-1
+ 508 0172 FFFF     		.short	-1
+ 509 0174 FFFF     		.short	-1
+ 510 0176 FFFF     		.short	-1
+ 511 0178 FFFF     		.short	-1
+ 512 017a FFFF     		.short	-1
+ 513 017c FFFF     		.short	-1
+ 514 017e FFFF     		.short	-1
+ 515 0180 FFFF     		.short	-1
+ 516 0182 FFFF     		.short	-1
+ 517 0184 FFFF     		.short	-1
+ 518 0186 FFFF     		.short	-1
+ 519 0188 FFFF     		.short	-1
+ 520 018a FFFF     		.short	-1
+ 521 018c FFFF     		.short	-1
+ 522 018e FFFF     		.short	-1
+ 523 0190 FFFF     		.short	-1
+ 524 0192 FFFF     		.short	-1
+ 525 0194 FFFF     		.short	-1
+ 526 0196 FFFF     		.short	-1
+ 527 0198 FFFF     		.short	-1
+ 528 019a FFFF     		.short	-1
+ 529 019c FFFF     		.short	-1
+ 530 019e FFFF     		.short	-1
+ 531 01a0 FFFF     		.short	-1
+ 532 01a2 FFFF     		.short	-1
+ 533 01a4 FFFF     		.short	-1
+ 534 01a6 FFFF     		.short	-1
+ 535 01a8 FFFF     		.short	-1
+ 536 01aa FFFF     		.short	-1
+ 537 01ac FFFF     		.short	-1
+ 538 01ae FFFF     		.short	-1
+ 539 01b0 FFFF     		.short	-1
+ 540 01b2 FFFF     		.short	-1
+ 541 01b4 FFFF     		.short	-1
+ 542 01b6 FFFF     		.short	-1
+ 543 01b8 FFFF     		.short	-1
+ 544 01ba FFFF     		.short	-1
+ 545 01bc FFFF     		.short	-1
+ 546 01be FFFF     		.short	-1
+ 547 01c0 FFFF     		.short	-1
+ 548 01c2 FFFF     		.short	-1
+ 549 01c4 FFFF     		.short	-1
+ 550 01c6 FFFF     		.short	-1
+ 551 01c8 FFFF     		.short	-1
+ 552 01ca FFFF     		.short	-1
+ 553 01cc FFFF     		.short	-1
+ 554 01ce FFFF     		.short	-1
+ 555 01d0 FFFF     		.short	-1
+ 556 01d2 FFFF     		.short	-1
+ 557 01d4 FFFF     		.short	-1
+ 558 01d6 FFFF     		.short	-1
+ 559 01d8 FFFF     		.short	-1
+ 560 01da FFFF     		.short	-1
+ 561 01dc FFFF     		.short	-1
+ 562 01de FFFF     		.short	-1
+ 563 01e0 FFFF     		.short	-1
+ 564 01e2 FFFF     		.short	-1
+ 565 01e4 FFFF     		.short	-1
+ 566 01e6 FFFF     		.short	-1
+ 567 01e8 FFFF     		.short	-1
+ 568 01ea FFFF     		.short	-1
+ 569 01ec FFFF     		.short	-1
+ 570 01ee FFFF     		.short	-1
+ 571 01f0 FFFF     		.short	-1
+ 572 01f2 FFFF     		.short	-1
+ 573 01f4 FFFF     		.short	-1
+ 574 01f6 FFFF     		.short	-1
+ 575 01f8 FFFF     		.short	-1
+ 576 01fa FFFF     		.short	-1
+ 577 01fc FFFF     		.short	-1
+ 578 01fe FFFF     		.short	-1
+ 579 0200 FFFF     		.short	-1
+ 580 0202 FFFF     		.short	-1
+ 581 0204 FFFF     		.short	-1
+ 582 0206 FFFF     		.short	-1
+ 583 0208 FFFF     		.short	-1
+ 584 020a FFFF     		.short	-1
+ 585 020c FFFF     		.short	-1
+ 586 020e FFFF     		.short	-1
+ 587 0210 FFFF     		.short	-1
+ 588 0212 FFFF     		.short	-1
+ 589 0214 FFFF     		.short	-1
+ 590 0216 FFFF     		.short	-1
+ 591 0218 FFFF     		.short	-1
+ 592 021a FFFF     		.short	-1
+ 593 021c FFFF     		.short	-1
+ 594 021e FFFF     		.short	-1
+ 595 0220 FFFF     		.short	-1
+ 596 0222 FFFF     		.short	-1
+ 597 0224 FFFF     		.short	-1
+ 598 0226 FFFF     		.short	-1
+ 599 0228 FFFF     		.short	-1
+ 600 022a FFFF     		.short	-1
+ 601 022c FFFF     		.short	-1
+ 602 022e FFFF     		.short	-1
+ 603 0230 FFFF     		.short	-1
+ 604 0232 FFFF     		.short	-1
+ 605 0234 FFFF     		.short	-1
+ 606 0236 FFFF     		.short	-1
+ 607 0238 FFFF     		.short	-1
+ 608 023a FFFF     		.short	-1
+ 609 023c FFFF     		.short	-1
+ 610 023e FFFF     		.short	-1
+ 611 0240 FFFF     		.short	-1
+ 612 0242 FFFF     		.short	-1
+ 613 0244 FFFF     		.short	-1
+ 614 0246 FFFF     		.short	-1
+ 615 0248 FFFF     		.short	-1
+ 616 024a FFFF     		.short	-1
+ 617 024c FFFF     		.short	-1
+ 618 024e FFFF     		.short	-1
+ 619 0250 FFFF     		.short	-1
+ 620 0252 FFFF     		.short	-1
+ 621 0254 FFFF     		.short	-1
+ 622 0256 FFFF     		.short	-1
+ 623 0258 FFFF     		.short	-1
+ 624 025a FFFF     		.short	-1
+ 625 025c FFFF     		.short	-1
+ 626 025e FFFF     		.short	-1
+ 627 0260 FFFF     		.short	-1
+ 628 0262 FFFF     		.short	-1
+ 629 0264 FFFF     		.short	-1
+ 630 0266 FFFF     		.short	-1
+ 631 0268 FFFF     		.short	-1
+ 632 026a FFFF     		.short	-1
+ 633 026c FFFF     		.short	-1
+ 634 026e FFFF     		.short	-1
+ 635 0270 FFFF     		.short	-1
+ 636 0272 FFFF     		.short	-1
+ 637 0274 FFFF     		.short	-1
+ 638 0276 FFFF     		.short	-1
+ 639 0278 FFFF     		.short	-1
+ 640 027a FFFF     		.short	-1
+ 641 027c FFFF     		.short	-1
+ 642 027e FFFF     		.short	-1
+ 643 0280 FFFF     		.short	-1
+ 644 0282 FFFF     		.short	-1
+ 645 0284 FFFF     		.short	-1
+ 646 0286 FFFF     		.short	-1
+ 647 0288 FFFF     		.short	-1
+ 648 028a FFFF     		.short	-1
+ 649 028c FFFF     		.short	-1
+ 650 028e FFFF     		.short	-1
+ 651 0290 FFFF     		.short	-1
+ 652 0292 FFFF     		.short	-1
+ 653 0294 FFFF     		.short	-1
+ 654 0296 FFFF     		.short	-1
+ 655 0298 FFFF     		.short	-1
+ 656 029a FFFF     		.short	-1
+ 657 029c FFFF     		.short	-1
+ 658 029e FFFF     		.short	-1
+ 659 02a0 FFFF     		.short	-1
+ 660 02a2 FFFF     		.short	-1
+ 661 02a4 FFFF     		.short	-1
+ 662 02a6 FFFF     		.short	-1
+ 663 02a8 FFFF     		.short	-1
+ 664 02aa FFFF     		.short	-1
+ 665 02ac FFFF     		.short	-1
+ 666 02ae FFFF     		.short	-1
+ 667 02b0 FFFF     		.short	-1
+ 668 02b2 FFFF     		.short	-1
+ 669 02b4 FFFF     		.short	-1
+ 670 02b6 FFFF     		.short	-1
+ 671 02b8 FFFF     		.short	-1
+ 672 02ba FFFF     		.short	-1
+ 673 02bc FFFF     		.short	-1
+ 674 02be FFFF     		.short	-1
+ 675 02c0 FFFF     		.short	-1
+ 676 02c2 FFFF     		.short	-1
+ 677 02c4 FFFF     		.short	-1
+ 678 02c6 FFFF     		.short	-1
+ 679 02c8 FFFF     		.short	-1
+ 680 02ca FFFF     		.short	-1
+ 681 02cc FFFF     		.short	-1
+ 682 02ce FFFF     		.short	-1
+ 683 02d0 FFFF     		.short	-1
+ 684 02d2 FFFF     		.short	-1
+ 685 02d4 FFFF     		.short	-1
+ 686 02d6 FFFF     		.short	-1
+ 687 02d8 FFFF     		.short	-1
+ 688 02da FFFF     		.short	-1
+ 689 02dc FFFF     		.short	-1
+ 690 02de FFFF     		.short	-1
+ 691 02e0 FFFF     		.short	-1
+ 692 02e2 FFFF     		.short	-1
+ 693 02e4 FFFF     		.short	-1
+ 694 02e6 FFFF     		.short	-1
+ 695 02e8 FFFF     		.short	-1
+ 696 02ea FFFF     		.short	-1
+ 697 02ec FFFF     		.short	-1
+ 698 02ee FFFF     		.short	-1
+ 699 02f0 FFFF     		.short	-1
+ 700 02f2 FFFF     		.short	-1
+ 701 02f4 FFFF     		.short	-1
+ 702 02f6 FFFF     		.short	-1
+ 703 02f8 FFFF     		.short	-1
+ 704 02fa FFFF     		.short	-1
+ 705 02fc FFFF     		.short	-1
+ 706 02fe FFFF     		.short	-1
+ 707 0300 FFFF     		.short	-1
+ 708 0302 FFFF     		.short	-1
+ 709 0304 FFFF     		.short	-1
+ 710 0306 FFFF     		.short	-1
+ 711 0308 FFFF     		.short	-1
+ 712 030a FFFF     		.short	-1
+ 713 030c FFFF     		.short	-1
+ 714 030e FFFF     		.short	-1
+ 715 0310 FFFF     		.short	-1
+ 716 0312 FFFF     		.short	-1
+ 717 0314 FFFF     		.short	-1
+ 718 0316 FFFF     		.short	-1
+ 719 0318 FFFF     		.short	-1
+ 720 031a FFFF     		.short	-1
+ 721 031c FFFF     		.short	-1
+ 722 031e FFFF     		.short	-1
+ 723 0320 FFFF     		.short	-1
+ 724 0322 FFFF     		.short	-1
+ 725 0324 FFFF     		.short	-1
+ 726 0326 FFFF     		.short	-1
+ 727 0328 FFFF     		.short	-1
+ 728 032a FFFF     		.short	-1
+ 729 032c FFFF     		.short	-1
+ 730 032e FFFF     		.short	-1
+ 731 0330 FFFF     		.short	-1
+ 732 0332 FFFF     		.short	-1
+ 733 0334 FFFF     		.short	-1
+ 734 0336 FFFF     		.short	-1
+ 735 0338 FFFF     		.short	-1
+ 736 033a FFFF     		.short	-1
+ 737 033c FFFF     		.short	-1
+ 738 033e FFFF     		.short	-1
+ 739 0340 FFFF     		.short	-1
+ 740 0342 FFFF     		.short	-1
+ 741 0344 FFFF     		.short	-1
+ 742 0346 FFFF     		.short	-1
+ 743 0348 FFFF     		.short	-1
+ 744 034a FFFF     		.short	-1
+ 745 034c FFFF     		.short	-1
+ 746 034e FFFF     		.short	-1
+ 747 0350 FFFF     		.short	-1
+ 748 0352 FFFF     		.short	-1
+ 749 0354 FFFF     		.short	-1
+ 750 0356 FFFF     		.short	-1
+ 751 0358 FFFF     		.short	-1
+ 752 035a FFFF     		.short	-1
+ 753 035c FFFF     		.short	-1
+ 754 035e FFFF     		.short	-1
+ 755 0360 FFFF     		.short	-1
+ 756 0362 FFFF     		.short	-1
+ 757 0364 FFFF     		.short	-1
+ 758 0366 FFFF     		.short	-1
+ 759 0368 FFFF     		.short	-1
+ 760 036a FFFF     		.short	-1
+ 761 036c FFFF     		.short	-1
+ 762 036e FFFF     		.short	-1
+ 763 0370 FFFF     		.short	-1
+ 764 0372 FFFF     		.short	-1
+ 765 0374 FFFF     		.short	-1
+ 766 0376 FFFF     		.short	-1
+ 767 0378 FFFF     		.short	-1
+ 768 037a FFFF     		.short	-1
+ 769 037c FFFF     		.short	-1
+ 770 037e FFFF     		.short	-1
+ 771 0380 FFFF     		.short	-1
+ 772 0382 FFFF     		.short	-1
+ 773 0384 FFFF     		.short	-1
+ 774 0386 FFFF     		.short	-1
+ 775 0388 FFFF     		.short	-1
+ 776 038a FFFF     		.short	-1
+ 777 038c FFFF     		.short	-1
+ 778 038e FFFF     		.short	-1
+ 779 0390 FFFF     		.short	-1
+ 780 0392 FFFF     		.short	-1
+ 781 0394 FFFF     		.short	-1
+ 782 0396 FFFF     		.short	-1
+ 783 0398 FFFF     		.short	-1
+ 784 039a FFFF     		.short	-1
+ 785 039c FFFF     		.short	-1
+ 786 039e FFFF     		.short	-1
+ 787 03a0 FFFF     		.short	-1
+ 788 03a2 FFFF     		.short	-1
+ 789 03a4 FFFF     		.short	-1
+ 790 03a6 FFFF     		.short	-1
+ 791 03a8 FFFF     		.short	-1
+ 792 03aa FFFF     		.short	-1
+ 793 03ac FFFF     		.short	-1
+ 794 03ae FFFF     		.short	-1
+ 795 03b0 FFFF     		.short	-1
+ 796 03b2 FFFF     		.short	-1
+ 797 03b4 FFFF     		.short	-1
+ 798 03b6 FFFF     		.short	-1
+ 799 03b8 FFFF     		.short	-1
+ 800 03ba FFFF     		.short	-1
+ 801 03bc FFFF     		.short	-1
+ 802 03be FFFF     		.short	-1
+ 803 03c0 FFFF     		.short	-1
+ 804 03c2 FFFF     		.short	-1
+ 805 03c4 FFFF     		.short	-1
+ 806 03c6 FFFF     		.short	-1
+ 807 03c8 FFFF     		.short	-1
+ 808 03ca FFFF     		.short	-1
+ 809 03cc FFFF     		.short	-1
+ 810 03ce FFFF     		.short	-1
+ 811 03d0 FFFF     		.short	-1
+ 812 03d2 FFFF     		.short	-1
+ 813 03d4 FFFF     		.short	-1
+ 814 03d6 FFFF     		.short	-1
+ 815 03d8 FFFF     		.short	-1
+ 816 03da FFFF     		.short	-1
+ 817 03dc FFFF     		.short	-1
+ 818 03de FFFF     		.short	-1
+ 819 03e0 FFFF     		.short	-1
+ 820 03e2 FFFF     		.short	-1
+ 821 03e4 FFFF     		.short	-1
+ 822 03e6 FFFF     		.short	-1
+ 823 03e8 FFFF     		.short	-1
+ 824 03ea FFFF     		.short	-1
+ 825 03ec FFFF     		.short	-1
+ 826 03ee FFFF     		.short	-1
+ 827 03f0 FFFF     		.short	-1
+ 828 03f2 FFFF     		.short	-1
+ 829 03f4 FFFF     		.short	-1
+ 830 03f6 FFFF     		.short	-1
+ 831 03f8 FFFF     		.short	-1
+ 832 03fa FFFF     		.short	-1
+ 833 03fc FFFF     		.short	-1
+ 834 03fe FFFF     		.short	-1
+ 835 0400 FFFF     		.short	-1
+ 836 0402 FFFF     		.short	-1
+ 837 0404 FFFF     		.short	-1
+ 838 0406 FFFF     		.short	-1
+ 839 0408 FFFF     		.short	-1
+ 840 040a FFFF     		.short	-1
+ 841 040c FFFF     		.short	-1
+ 842 040e FFFF     		.short	-1
+ 843 0410 FFFF     		.short	-1
+ 844 0412 FFFF     		.short	-1
+ 845 0414 FFFF     		.short	-1
+ 846 0416 FFFF     		.short	-1
+ 847 0418 FFFF     		.short	-1
+ 848 041a FFFF     		.short	-1
+ 849 041c FFFF     		.short	-1
+ 850 041e FFFF     		.short	-1
+ 851              		.bss
+ 852              		.align	2
+ 853              		.set	.LANCHOR0,. + 0
+ 856              	fill_tn0:
+ 857 0000 00000000 		.space	816
+ 857      00000000 
+ 857      00000000 
+ 857      00000000 
+ 857      00000000 
+ 860              	g_bq_slots:
+ 861 0330 00000000 		.space	11264
+ 861      00000000 
+ 861      00000000 
+ 861      00000000 
+ 861      00000000 
+ 864              	g_bq_freemap:
+ 865 2f30 00000000 		.space	64
+ 865      00000000 
+ 865      00000000 
+ 865      00000000 
+ 865      00000000 
+ 866              		.text
+ 867              	.Letext0:
+ 868              		.file 2 "/opt/arm/install/arm-none-eabi/sys-include/stdint.h"
+ 869              		.file 3 "apps/trx/burst_queue.h"
+ 870              		.file 4 "include/stdio.h"
+DEFINED SYMBOLS
+                            *ABS*:00000000 trx.c
+     /tmp/ccowNHRx.s:18     .text.trx_discarded_burst:00000000 $a
+     /tmp/ccowNHRx.s:20     .text.trx_discarded_burst:00000000 trx_discarded_burst
+     /tmp/ccowNHRx.s:75     .text.trx_discarded_burst:00000048 $d
+     /tmp/ccowNHRx.s:82     .text.trx_init:00000000 $a
+     /tmp/ccowNHRx.s:85     .text.trx_init:00000000 trx_init
+     /tmp/ccowNHRx.s:160    .text.trx_init:0000007c $d
+     /tmp/ccowNHRx.s:167    .text.trx_put_burst:00000000 $a
+     /tmp/ccowNHRx.s:170    .text.trx_put_burst:00000000 trx_put_burst
+     /tmp/ccowNHRx.s:234    .text.trx_put_burst:00000058 $d
+     /tmp/ccowNHRx.s:239    .text.trx_get_burst:00000000 $a
+     /tmp/ccowNHRx.s:242    .text.trx_get_burst:00000000 trx_get_burst
+     /tmp/ccowNHRx.s:315    .text.trx_get_burst:00000070 $d
+     /tmp/ccowNHRx.s:324    .data:00000000 $d
+     /tmp/ccowNHRx.s:328    .data:00000000 g_bq
+     /tmp/ccowNHRx.s:338    .data:00000020 g_bq_head
+     /tmp/ccowNHRx.s:864    .bss:00002f30 g_bq_freemap
+     /tmp/ccowNHRx.s:860    .bss:00000330 g_bq_slots
+     /tmp/ccowNHRx.s:852    .bss:00000000 $d
+     /tmp/ccowNHRx.s:856    .bss:00000000 fill_tn0
+                     .debug_frame:00000010 $d
+
+UNDEFINED SYMBOLS
+__aeabi_uidivmod
+printf
+memcpy
+__aeabi_idivmod
+bq_reset
+bq_set_discard_fn
+bq_push
+bq_pop_head

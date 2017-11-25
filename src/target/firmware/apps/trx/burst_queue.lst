@@ -1,0 +1,861 @@
+   1              		.cpu arm7tdmi
+   2              		.fpu softvfp
+   3              		.eabi_attribute 20, 1
+   4              		.eabi_attribute 21, 1
+   5              		.eabi_attribute 23, 3
+   6              		.eabi_attribute 24, 1
+   7              		.eabi_attribute 25, 1
+   8              		.eabi_attribute 26, 1
+   9              		.eabi_attribute 30, 4
+  10              		.eabi_attribute 34, 0
+  11              		.eabi_attribute 18, 4
+  12              		.file	"burst_queue.c"
+  13              		.text
+  14              	.Ltext0:
+  15              		.cfi_sections	.debug_frame
+  16              		.section	.text.fn_cmp,"ax",%progbits
+  17              		.align	2
+  19              	fn_cmp:
+  20              	.LFB2:
+  21              		.file 1 "apps/trx/burst_queue.c"
+   1:apps/trx/burst_queue.c **** /* Burst queue */
+   2:apps/trx/burst_queue.c **** 
+   3:apps/trx/burst_queue.c **** /*
+   4:apps/trx/burst_queue.c ****  * Copyright (C) 2013  Sylvain Munaut <tnt@246tNt.com>
+   5:apps/trx/burst_queue.c ****  *
+   6:apps/trx/burst_queue.c ****  * All Rights Reserved
+   7:apps/trx/burst_queue.c ****  *
+   8:apps/trx/burst_queue.c ****  * This program is free software; you can redistribute it and/or modify
+   9:apps/trx/burst_queue.c ****  * it under the terms of the GNU Affero General Public License as published by
+  10:apps/trx/burst_queue.c ****  * the Free Software Foundation; either version 3 of the License, or
+  11:apps/trx/burst_queue.c ****  * (at your option) any later version.
+  12:apps/trx/burst_queue.c ****  *
+  13:apps/trx/burst_queue.c ****  * This program is distributed in the hope that it will be useful,
+  14:apps/trx/burst_queue.c ****  * but WITHOUT ANY WARRANTY; without even the implied warranty of
+  15:apps/trx/burst_queue.c ****  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  16:apps/trx/burst_queue.c ****  * GNU Affero General Public License for more details.
+  17:apps/trx/burst_queue.c ****  *
+  18:apps/trx/burst_queue.c ****  * You should have received a copy of the GNU Affero General Public License
+  19:apps/trx/burst_queue.c ****  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+  20:apps/trx/burst_queue.c ****  */
+  21:apps/trx/burst_queue.c **** 
+  22:apps/trx/burst_queue.c **** #include <stdint.h>
+  23:apps/trx/burst_queue.c **** #include <stdlib.h>
+  24:apps/trx/burst_queue.c **** #include <string.h>
+  25:apps/trx/burst_queue.c **** 
+  26:apps/trx/burst_queue.c **** #include "burst_queue.h"
+  27:apps/trx/burst_queue.c **** 
+  28:apps/trx/burst_queue.c **** 
+  29:apps/trx/burst_queue.c **** /* ------------------------------------------------------------------------ */
+  30:apps/trx/burst_queue.c **** /* FN handling helpers                                                      */
+  31:apps/trx/burst_queue.c **** /* ------------------------------------------------------------------------ */
+  32:apps/trx/burst_queue.c **** 
+  33:apps/trx/burst_queue.c **** #define FN_MAX	((2048*26*51)-1)
+  34:apps/trx/burst_queue.c **** 
+  35:apps/trx/burst_queue.c **** static inline int fn_cmp(uint32_t fn1, uint32_t fn2)
+  36:apps/trx/burst_queue.c **** {
+  22              		.loc 1 36 0
+  23              		.cfi_startproc
+  24              		@ Function supports interworking.
+  25              		@ args = 0, pretend = 0, frame = 0
+  26              		@ frame_needed = 0, uses_anonymous_args = 0
+  27              		@ link register save eliminated.
+  28              	.LVL0:
+  37:apps/trx/burst_queue.c **** 	if (fn1 == fn2)
+  29              		.loc 1 37 0
+  30 0000 010050E1 		cmp	r0, r1
+  31 0004 0C00000A 		beq	.L3
+  38:apps/trx/burst_queue.c **** 		return 0;
+  39:apps/trx/burst_queue.c **** 
+  40:apps/trx/burst_queue.c **** 	if ((fn2 > (FN_MAX >> 1)) && (fn1 < (FN_MAX >> 1)))
+  32              		.loc 1 40 0
+  33 0008 3C309FE5 		ldr	r3, .L7
+  34 000c 3C209FE5 		ldr	r2, .L7+4
+  35 0010 030050E1 		cmp	r0, r3
+  36 0014 0030A083 		movhi	r3, #0
+  37 0018 0130A093 		movls	r3, #1
+  38 001c 020051E1 		cmp	r1, r2
+  39 0020 0030A093 		movls	r3, #0
+  40 0024 000053E3 		cmp	r3, #0
+  41 0028 0500001A 		bne	.L4
+  41:apps/trx/burst_queue.c **** 		return 1;
+  42:apps/trx/burst_queue.c **** 
+  43:apps/trx/burst_queue.c **** 	return fn1 < fn2 ? -1 : 1;
+  42              		.loc 1 43 0
+  43 002c 010050E1 		cmp	r0, r1
+  44 0030 0100A023 		movcs	r0, #1
+  45 0034 0000E033 		mvncc	r0, #0
+  46              	.LVL1:
+  47 0038 1EFF2FE1 		bx	lr
+  48              	.LVL2:
+  49              	.L3:
+  38:apps/trx/burst_queue.c **** 		return 0;
+  50              		.loc 1 38 0
+  51 003c 0000A0E3 		mov	r0, #0
+  52              	.LVL3:
+  53 0040 1EFF2FE1 		bx	lr
+  54              	.LVL4:
+  55              	.L4:
+  41:apps/trx/burst_queue.c **** 		return 1;
+  56              		.loc 1 41 0
+  57 0044 0100A0E3 		mov	r0, #1
+  58              	.LVL5:
+  44:apps/trx/burst_queue.c **** }
+  59              		.loc 1 44 0
+  60 0048 1EFF2FE1 		bx	lr
+  61              	.L8:
+  62              		.align	2
+  63              	.L7:
+  64 004c FEB71400 		.word	1357822
+  65 0050 FFB71400 		.word	1357823
+  66              		.cfi_endproc
+  67              	.LFE2:
+  69              		.section	.text.bq_free_slot,"ax",%progbits
+  70              		.align	2
+  72              	bq_free_slot:
+  73              	.LFB4:
+  45:apps/trx/burst_queue.c **** 
+  46:apps/trx/burst_queue.c **** 
+  47:apps/trx/burst_queue.c **** /* ------------------------------------------------------------------------ */
+  48:apps/trx/burst_queue.c **** /* Internal slot management                                                 */
+  49:apps/trx/burst_queue.c **** /* ------------------------------------------------------------------------ */
+  50:apps/trx/burst_queue.c **** 
+  51:apps/trx/burst_queue.c **** static uint16_t
+  52:apps/trx/burst_queue.c **** bq_alloc_slot(struct burst_queue *bq)
+  53:apps/trx/burst_queue.c **** {
+  54:apps/trx/burst_queue.c **** 	int i, j, n;
+  55:apps/trx/burst_queue.c **** 	uint32_t fm;
+  56:apps/trx/burst_queue.c **** 	uint16_t s;
+  57:apps/trx/burst_queue.c **** 
+  58:apps/trx/burst_queue.c **** 	/* Find first zone with free blocks */
+  59:apps/trx/burst_queue.c **** 	n = (bq->capacity + 31) >> 5;
+  60:apps/trx/burst_queue.c **** 	for (i=0; i<n; i++) {
+  61:apps/trx/burst_queue.c **** 		if (bq->freemap[i] != 0xffffffff)
+  62:apps/trx/burst_queue.c **** 			break;
+  63:apps/trx/burst_queue.c **** 	}
+  64:apps/trx/burst_queue.c **** 
+  65:apps/trx/burst_queue.c **** 	/* None ? */
+  66:apps/trx/burst_queue.c **** 	if (i == n)
+  67:apps/trx/burst_queue.c **** 		return 0xffff;
+  68:apps/trx/burst_queue.c **** 
+  69:apps/trx/burst_queue.c **** 	/* Find slot in that zone */
+  70:apps/trx/burst_queue.c **** 	fm = bq->freemap[i];
+  71:apps/trx/burst_queue.c **** 
+  72:apps/trx/burst_queue.c **** 	for (j=0; j<32; j++)
+  73:apps/trx/burst_queue.c **** 		if (!(fm & (1 << j)))
+  74:apps/trx/burst_queue.c **** 			break;
+  75:apps/trx/burst_queue.c **** 
+  76:apps/trx/burst_queue.c **** 	/* Final index */
+  77:apps/trx/burst_queue.c **** 	s = (i << 5) | j;
+  78:apps/trx/burst_queue.c **** 
+  79:apps/trx/burst_queue.c **** 	if (s >= bq->capacity)
+  80:apps/trx/burst_queue.c **** 		return 0xffff;
+  81:apps/trx/burst_queue.c **** 
+  82:apps/trx/burst_queue.c **** 	/* Allocate it */
+  83:apps/trx/burst_queue.c **** 	bq->freemap[i] |= (1 << j);
+  84:apps/trx/burst_queue.c **** 	bq->used++;
+  85:apps/trx/burst_queue.c **** 
+  86:apps/trx/burst_queue.c **** 	return s;
+  87:apps/trx/burst_queue.c **** }
+  88:apps/trx/burst_queue.c **** 
+  89:apps/trx/burst_queue.c **** static void
+  90:apps/trx/burst_queue.c **** bq_free_slot(struct burst_queue *bq, uint16_t slot)
+  91:apps/trx/burst_queue.c **** {
+  74              		.loc 1 91 0
+  75              		.cfi_startproc
+  76              		@ Function supports interworking.
+  77              		@ args = 0, pretend = 0, frame = 0
+  78              		@ frame_needed = 0, uses_anonymous_args = 0
+  79              		@ link register save eliminated.
+  80              	.LVL6:
+  92:apps/trx/burst_queue.c **** 	bq->freemap[(slot >> 5)] &= ~(1 << (slot & 0x1f));
+  81              		.loc 1 92 0
+  82 0000 183090E5 		ldr	r3, [r0, #24]
+  83 0004 A122A0E1 		mov	r2, r1, lsr #5
+  84 0008 02C193E7 		ldr	ip, [r3, r2, asl #2]
+  91:apps/trx/burst_queue.c **** {
+  85              		.loc 1 91 0
+  86 000c 04402DE5 		str	r4, [sp, #-4]!
+  87              	.LCFI0:
+  88              		.cfi_def_cfa_offset 4
+  89              		.cfi_offset 4, -4
+  90              		.loc 1 92 0
+  91 0010 1F1001E2 		and	r1, r1, #31
+  92              	.LVL7:
+  93 0014 0140A0E3 		mov	r4, #1
+  94 0018 1411CCE1 		bic	r1, ip, r4, asl r1
+  95 001c 021183E7 		str	r1, [r3, r2, asl #2]
+  93:apps/trx/burst_queue.c **** 	bq->used--;
+  96              		.loc 1 93 0
+  97 0020 083090E5 		ldr	r3, [r0, #8]
+  98 0024 013043E2 		sub	r3, r3, #1
+  99 0028 083080E5 		str	r3, [r0, #8]
+  94:apps/trx/burst_queue.c **** }
+ 100              		.loc 1 94 0
+ 101 002c 04409DE4 		ldr	r4, [sp], #4
+ 102 0030 1EFF2FE1 		bx	lr
+ 103              		.cfi_endproc
+ 104              	.LFE4:
+ 106              		.section	.text.bq_reset,"ax",%progbits
+ 107              		.align	2
+ 108              		.global	bq_reset
+ 110              	bq_reset:
+ 111              	.LFB5:
+  95:apps/trx/burst_queue.c **** 
+  96:apps/trx/burst_queue.c **** 
+  97:apps/trx/burst_queue.c **** /* ------------------------------------------------------------------------ */
+  98:apps/trx/burst_queue.c **** /* Exposed API                                                              */
+  99:apps/trx/burst_queue.c **** /* ------------------------------------------------------------------------ */
+ 100:apps/trx/burst_queue.c **** 
+ 101:apps/trx/burst_queue.c **** void
+ 102:apps/trx/burst_queue.c **** bq_reset(struct burst_queue *bq)
+ 103:apps/trx/burst_queue.c **** {
+ 112              		.loc 1 103 0
+ 113              		.cfi_startproc
+ 114              		@ Function supports interworking.
+ 115              		@ args = 0, pretend = 0, frame = 0
+ 116              		@ frame_needed = 0, uses_anonymous_args = 0
+ 117              	.LVL8:
+ 104:apps/trx/burst_queue.c **** 	int i;
+ 105:apps/trx/burst_queue.c **** 
+ 106:apps/trx/burst_queue.c **** 	for (i=0; i<bq->n_heads; i++)
+ 118              		.loc 1 106 0
+ 119 0000 002090E5 		ldr	r2, [r0]
+ 103:apps/trx/burst_queue.c **** {
+ 120              		.loc 1 103 0
+ 121 0004 10402DE9 		stmfd	sp!, {r4, lr}
+ 122              	.LCFI1:
+ 123              		.cfi_def_cfa_offset 8
+ 124              		.cfi_offset 4, -8
+ 125              		.cfi_offset 14, -4
+ 126              		.loc 1 106 0
+ 127 0008 0030A0E3 		mov	r3, #0
+ 103:apps/trx/burst_queue.c **** {
+ 128              		.loc 1 103 0
+ 129 000c 0040A0E1 		mov	r4, r0
+ 107:apps/trx/burst_queue.c **** 		bq->head[i] = 0xffff;
+ 130              		.loc 1 107 0
+ 131 0010 0010E0E3 		mvn	r1, #0
+ 132              	.LVL9:
+ 133              	.L11:
+ 106:apps/trx/burst_queue.c **** 	for (i=0; i<bq->n_heads; i++)
+ 134              		.loc 1 106 0 discriminator 1
+ 135 0014 020053E1 		cmp	r3, r2
+ 136              		.loc 1 107 0 discriminator 2
+ 137 0018 14C094B5 		ldrlt	ip, [r4, #20]
+ 138 001c 8300A0B1 		movlt	r0, r3, asl #1
+ 139 0020 B0108CB1 		strlth	r1, [ip, r0]	@ movhi
+ 106:apps/trx/burst_queue.c **** 	for (i=0; i<bq->n_heads; i++)
+ 140              		.loc 1 106 0 discriminator 2
+ 141 0024 013083B2 		addlt	r3, r3, #1
+ 142              	.LVL10:
+ 143 0028 F9FFFFBA 		blt	.L11
+ 144              	.L13:
+ 108:apps/trx/burst_queue.c **** 
+ 109:apps/trx/burst_queue.c **** 	memset(bq->freemap, 0x00, sizeof(uint32_t) * ((bq->capacity+31) >> 5));
+ 145              		.loc 1 109 0
+ 146 002c 042094E5 		ldr	r2, [r4, #4]
+ 147 0030 1F2082E2 		add	r2, r2, #31
+ 148 0034 C222A0E1 		mov	r2, r2, asr #5
+ 149 0038 180094E5 		ldr	r0, [r4, #24]
+ 150 003c 0010A0E3 		mov	r1, #0
+ 151 0040 0221A0E1 		mov	r2, r2, asl #2
+ 152 0044 FEFFFFEB 		bl	memset
+ 153              	.LVL11:
+ 110:apps/trx/burst_queue.c **** 	memset(bq->slots, 0x00, sizeof(struct burst_queue_slot) * bq->capacity);
+ 154              		.loc 1 110 0
+ 155 0048 043094E5 		ldr	r3, [r4, #4]
+ 156 004c 1620A0E3 		mov	r2, #22
+ 157 0050 1C0094E5 		ldr	r0, [r4, #28]
+ 158 0054 0010A0E3 		mov	r1, #0
+ 159 0058 930202E0 		mul	r2, r3, r2
+ 160 005c FEFFFFEB 		bl	memset
+ 161              	.LVL12:
+ 111:apps/trx/burst_queue.c **** }
+ 162              		.loc 1 111 0
+ 163 0060 1040BDE8 		ldmfd	sp!, {r4, lr}
+ 164              	.LVL13:
+ 165 0064 1EFF2FE1 		bx	lr
+ 166              		.cfi_endproc
+ 167              	.LFE5:
+ 169              		.section	.text.bq_set_discard_fn,"ax",%progbits
+ 170              		.align	2
+ 171              		.global	bq_set_discard_fn
+ 173              	bq_set_discard_fn:
+ 174              	.LFB6:
+ 112:apps/trx/burst_queue.c **** 
+ 113:apps/trx/burst_queue.c **** void
+ 114:apps/trx/burst_queue.c **** bq_set_discard_fn(struct burst_queue *bq, bq_discard_fn_t cb, void *cb_data)
+ 115:apps/trx/burst_queue.c **** {
+ 175              		.loc 1 115 0
+ 176              		.cfi_startproc
+ 177              		@ Function supports interworking.
+ 178              		@ args = 0, pretend = 0, frame = 0
+ 179              		@ frame_needed = 0, uses_anonymous_args = 0
+ 180              		@ link register save eliminated.
+ 181              	.LVL14:
+ 116:apps/trx/burst_queue.c **** 	bq->cb = cb;
+ 182              		.loc 1 116 0
+ 183 0000 0C1080E5 		str	r1, [r0, #12]
+ 117:apps/trx/burst_queue.c **** 	bq->cb_data = cb_data;
+ 184              		.loc 1 117 0
+ 185 0004 102080E5 		str	r2, [r0, #16]
+ 186 0008 1EFF2FE1 		bx	lr
+ 187              		.cfi_endproc
+ 188              	.LFE6:
+ 190              		.section	.text.bq_push,"ax",%progbits
+ 191              		.align	2
+ 192              		.global	bq_push
+ 194              	bq_push:
+ 195              	.LFB7:
+ 118:apps/trx/burst_queue.c **** }
+ 119:apps/trx/burst_queue.c **** 
+ 120:apps/trx/burst_queue.c **** struct burst_data *
+ 121:apps/trx/burst_queue.c **** bq_push(struct burst_queue *bq, int head, uint32_t fn)
+ 122:apps/trx/burst_queue.c **** {
+ 196              		.loc 1 122 0
+ 197              		.cfi_startproc
+ 198              		@ Function supports interworking.
+ 199              		@ args = 0, pretend = 0, frame = 8
+ 200              		@ frame_needed = 0, uses_anonymous_args = 0
+ 201              	.LVL15:
+ 202 0000 F74F2DE9 		stmfd	sp!, {r0, r1, r2, r4, r5, r6, r7, r8, r9, r10, fp, lr}
+ 203              	.LCFI2:
+ 204              		.cfi_def_cfa_offset 48
+ 205              		.cfi_offset 0, -48
+ 206              		.cfi_offset 1, -44
+ 207              		.cfi_offset 2, -40
+ 208              		.cfi_offset 4, -36
+ 209              		.cfi_offset 5, -32
+ 210              		.cfi_offset 6, -28
+ 211              		.cfi_offset 7, -24
+ 212              		.cfi_offset 8, -20
+ 213              		.cfi_offset 9, -16
+ 214              		.cfi_offset 10, -12
+ 215              		.cfi_offset 11, -8
+ 216              		.cfi_offset 14, -4
+ 217              	.LBB5:
+ 218              	.LBB6:
+  59:apps/trx/burst_queue.c **** 	n = (bq->capacity + 31) >> 5;
+ 219              		.loc 1 59 0
+ 220 0004 047090E5 		ldr	r7, [r0, #4]
+ 221 0008 1F3087E2 		add	r3, r7, #31
+ 222              	.LBE6:
+ 223              	.LBE5:
+ 224              		.loc 1 122 0
+ 225 000c 0250A0E1 		mov	r5, r2
+ 226              	.LBB11:
+ 227              	.LBB7:
+  59:apps/trx/burst_queue.c **** 	n = (bq->capacity + 31) >> 5;
+ 228              		.loc 1 59 0
+ 229 0010 C332A0E1 		mov	r3, r3, asr #5
+ 230              	.LVL16:
+  60:apps/trx/burst_queue.c **** 	for (i=0; i<n; i++) {
+ 231              		.loc 1 60 0
+ 232 0014 0060A0E3 		mov	r6, #0
+ 233              	.LVL17:
+ 234              	.L16:
+ 235 0018 030056E1 		cmp	r6, r3
+ 236 001c 030000AA 		bge	.L21
+  61:apps/trx/burst_queue.c **** 		if (bq->freemap[i] != 0xffffffff)
+ 237              		.loc 1 61 0
+ 238 0020 182090E5 		ldr	r2, [r0, #24]
+ 239 0024 062192E7 		ldr	r2, [r2, r6, asl #2]
+ 240 0028 010072E3 		cmn	r2, #1
+ 241 002c 0200000A 		beq	.L17
+ 242              	.L21:
+  66:apps/trx/burst_queue.c **** 	if (i == n)
+ 243              		.loc 1 66 0
+ 244 0030 030056E1 		cmp	r6, r3
+ 245 0034 0200001A 		bne	.L38
+ 246 0038 0D0000EA 		b	.L18
+ 247              	.L17:
+  60:apps/trx/burst_queue.c **** 	for (i=0; i<n; i++) {
+ 248              		.loc 1 60 0
+ 249 003c 016086E2 		add	r6, r6, #1
+ 250              	.LVL18:
+ 251 0040 F4FFFFEA 		b	.L16
+ 252              	.L38:
+  70:apps/trx/burst_queue.c **** 	fm = bq->freemap[i];
+ 253              		.loc 1 70 0
+ 254 0044 182090E5 		ldr	r2, [r0, #24]
+ 255 0048 06C192E7 		ldr	ip, [r2, r6, asl #2]
+ 256              	.LVL19:
+ 257 004c 0681A0E1 		mov	r8, r6, asl #2
+  72:apps/trx/burst_queue.c **** 	for (j=0; j<32; j++)
+ 258              		.loc 1 72 0
+ 259 0050 0030A0E3 		mov	r3, #0
+ 260              	.LVL20:
+  73:apps/trx/burst_queue.c **** 		if (!(fm & (1 << j)))
+ 261              		.loc 1 73 0
+ 262 0054 0140A0E3 		mov	r4, #1
+ 263              	.LVL21:
+ 264              	.L24:
+ 265 0058 14931CE0 		ands	r9, ip, r4, asl r3
+ 266 005c 0600001A 		bne	.L39
+ 267              	.L23:
+  77:apps/trx/burst_queue.c **** 	s = (i << 5) | j;
+ 268              		.loc 1 77 0
+ 269 0060 866283E1 		orr	r6, r3, r6, asl #5
+ 270              	.LVL22:
+ 271 0064 0668A0E1 		mov	r6, r6, asl #16
+ 272 0068 2668A0E1 		mov	r6, r6, lsr #16
+ 273              	.LVL23:
+  79:apps/trx/burst_queue.c **** 	if (s >= bq->capacity)
+ 274              		.loc 1 79 0
+ 275 006c 070056E1 		cmp	r6, r7
+ 276 0070 050000BA 		blt	.L40
+ 277              	.LVL24:
+ 278              	.L18:
+ 279              	.LBE7:
+ 280              	.LBE11:
+ 123:apps/trx/burst_queue.c **** 	uint16_t s;
+ 124:apps/trx/burst_queue.c **** 
+ 125:apps/trx/burst_queue.c **** 	/* Get a slot */
+ 126:apps/trx/burst_queue.c **** 	s = bq_alloc_slot(bq);
+ 127:apps/trx/burst_queue.c **** 	if (s == 0xffff)
+ 128:apps/trx/burst_queue.c **** 		return NULL;
+ 281              		.loc 1 128 0
+ 282 0074 0000A0E3 		mov	r0, #0
+ 283              	.LVL25:
+ 284 0078 5B0000EA 		b	.L22
+ 285              	.LVL26:
+ 286              	.L39:
+ 287              	.LBB12:
+ 288              	.LBB8:
+  72:apps/trx/burst_queue.c **** 	for (j=0; j<32; j++)
+ 289              		.loc 1 72 0
+ 290 007c 013083E2 		add	r3, r3, #1
+ 291              	.LVL27:
+ 292 0080 200053E3 		cmp	r3, #32
+ 293 0084 F3FFFF1A 		bne	.L24
+ 294 0088 F4FFFFEA 		b	.L23
+ 295              	.LVL28:
+ 296              	.L40:
+  83:apps/trx/burst_queue.c **** 	bq->freemap[i] |= (1 << j);
+ 297              		.loc 1 83 0
+ 298 008c 0140A0E3 		mov	r4, #1
+ 299 0090 14338CE1 		orr	r3, ip, r4, asl r3
+ 300              	.LVL29:
+ 301              	.LBE8:
+ 302              	.LBE12:
+ 127:apps/trx/burst_queue.c **** 	if (s == 0xffff)
+ 303              		.loc 1 127 0
+ 304 0094 5CA19FE5 		ldr	r10, .L42
+ 305              	.LBB13:
+ 306              	.LBB9:
+  83:apps/trx/burst_queue.c **** 	bq->freemap[i] |= (1 << j);
+ 307              		.loc 1 83 0
+ 308 0098 083082E7 		str	r3, [r2, r8]
+  84:apps/trx/burst_queue.c **** 	bq->used++;
+ 309              		.loc 1 84 0
+ 310 009c 083090E5 		ldr	r3, [r0, #8]
+ 311              	.LBE9:
+ 312              	.LBE13:
+ 127:apps/trx/burst_queue.c **** 	if (s == 0xffff)
+ 313              		.loc 1 127 0
+ 314 00a0 0A0056E1 		cmp	r6, r10
+ 315              	.LBB14:
+ 316              	.LBB10:
+  84:apps/trx/burst_queue.c **** 	bq->used++;
+ 317              		.loc 1 84 0
+ 318 00a4 043083E0 		add	r3, r3, r4
+ 319 00a8 083080E5 		str	r3, [r0, #8]
+ 320              	.LBE10:
+ 321              	.LBE14:
+ 127:apps/trx/burst_queue.c **** 	if (s == 0xffff)
+ 322              		.loc 1 127 0
+ 323 00ac F0FFFF0A 		beq	.L18
+ 129:apps/trx/burst_queue.c **** 
+ 130:apps/trx/burst_queue.c **** 	/* Do we need to replace the head ? */
+ 131:apps/trx/burst_queue.c **** 	if ((bq->head[head] == 0xffff) ||
+ 324              		.loc 1 131 0
+ 325 00b0 1184A0E1 		mov	r8, r1, asl r4
+ 326 00b4 142090E5 		ldr	r2, [r0, #20]
+ 327 00b8 B87092E1 		ldrh	r7, [r2, r8]
+ 328              	.LVL30:
+ 329 00bc 0A0057E1 		cmp	r7, r10
+ 330 00c0 1C4090E5 		ldr	r4, [r0, #28]
+ 331 00c4 1200000A 		beq	.L25
+ 132:apps/trx/burst_queue.c **** 	    (fn_cmp(fn, bq->slots[bq->head[head]].fn) < 0))
+ 332              		.loc 1 132 0 discriminator 1
+ 333 00c8 16B0A0E3 		mov	fp, #22
+ 334 00cc 9B0703E0 		mul	r3, fp, r7
+ 335 00d0 039084E0 		add	r9, r4, r3
+ 336 00d4 0110D9E5 		ldrb	r1, [r9, #1]	@ zero_extendqisi2
+ 337              	.LVL31:
+ 338 00d8 0330D4E7 		ldrb	r3, [r4, r3]	@ zero_extendqisi2
+ 339 00dc 013483E1 		orr	r3, r3, r1, asl #8
+ 340 00e0 0210D9E5 		ldrb	r1, [r9, #2]	@ zero_extendqisi2
+ 341 00e4 013883E1 		orr	r3, r3, r1, asl #16
+ 342 00e8 0310D9E5 		ldrb	r1, [r9, #3]	@ zero_extendqisi2
+ 343 00ec 0500A0E1 		mov	r0, r5
+ 344              	.LVL32:
+ 345 00f0 011C83E1 		orr	r1, r3, r1, asl #24
+ 346 00f4 04208DE5 		str	r2, [sp, #4]
+ 347 00f8 FEFFFFEB 		bl	fn_cmp
+ 348              	.LVL33:
+ 131:apps/trx/burst_queue.c **** 	if ((bq->head[head] == 0xffff) ||
+ 349              		.loc 1 131 0 discriminator 1
+ 350 00fc 000050E3 		cmp	r0, #0
+ 351              	.LBB15:
+ 133:apps/trx/burst_queue.c **** 	{
+ 134:apps/trx/burst_queue.c **** 		bq->slots[s].fn = fn;
+ 135:apps/trx/burst_queue.c **** 		bq->slots[s].next = bq->head[head];
+ 136:apps/trx/burst_queue.c **** 		bq->head[head] = s;
+ 137:apps/trx/burst_queue.c **** 	}
+ 138:apps/trx/burst_queue.c **** 	else
+ 139:apps/trx/burst_queue.c **** 	{
+ 140:apps/trx/burst_queue.c **** 		/* Insert at the right place */
+ 141:apps/trx/burst_queue.c **** 		uint16_t c, n;
+ 142:apps/trx/burst_queue.c **** 
+ 143:apps/trx/burst_queue.c **** 		c = bq->head[head];
+ 144:apps/trx/burst_queue.c **** 		n = bq->slots[c].next;
+ 352              		.loc 1 144 0 discriminator 1
+ 353 0100 0430D9A5 		ldrgeb	r3, [r9, #4]	@ zero_extendqisi2
+ 354 0104 0580D9A5 		ldrgeb	r8, [r9, #5]	@ zero_extendqisi2
+ 355              	.LBE15:
+ 131:apps/trx/burst_queue.c **** 	if ((bq->head[head] == 0xffff) ||
+ 356              		.loc 1 131 0 discriminator 1
+ 357 0108 04209DE5 		ldr	r2, [sp, #4]
+ 358              	.LBB16:
+ 359              		.loc 1 144 0 discriminator 1
+ 360 010c 088483A1 		orrge	r8, r3, r8, asl #8
+ 361              	.LBE16:
+ 131:apps/trx/burst_queue.c **** 	if ((bq->head[head] == 0xffff) ||
+ 362              		.loc 1 131 0 discriminator 1
+ 363 0110 1F0000AA 		bge	.L28
+ 364              	.L25:
+ 134:apps/trx/burst_queue.c **** 		bq->slots[s].fn = fn;
+ 365              		.loc 1 134 0
+ 366 0114 1610A0E3 		mov	r1, #22
+ 367 0118 960101E0 		mul	r1, r6, r1
+ 368 011c 0150C4E7 		strb	r5, [r4, r1]
+ 369 0120 013084E0 		add	r3, r4, r1
+ 370 0124 2514A0E1 		mov	r1, r5, lsr #8
+ 371 0128 0110C3E5 		strb	r1, [r3, #1]
+ 135:apps/trx/burst_queue.c **** 		bq->slots[s].next = bq->head[head];
+ 372              		.loc 1 135 0
+ 373 012c 0470C3E5 		strb	r7, [r3, #4]
+ 134:apps/trx/burst_queue.c **** 		bq->slots[s].fn = fn;
+ 374              		.loc 1 134 0
+ 375 0130 2518A0E1 		mov	r1, r5, lsr #16
+ 135:apps/trx/burst_queue.c **** 		bq->slots[s].next = bq->head[head];
+ 376              		.loc 1 135 0
+ 377 0134 2774A0E1 		mov	r7, r7, lsr #8
+ 134:apps/trx/burst_queue.c **** 		bq->slots[s].fn = fn;
+ 378              		.loc 1 134 0
+ 379 0138 255CA0E1 		mov	r5, r5, lsr #24
+ 380              	.LVL34:
+ 381 013c 0210C3E5 		strb	r1, [r3, #2]
+ 382 0140 0350C3E5 		strb	r5, [r3, #3]
+ 135:apps/trx/burst_queue.c **** 		bq->slots[s].next = bq->head[head];
+ 383              		.loc 1 135 0
+ 384 0144 0570C3E5 		strb	r7, [r3, #5]
+ 136:apps/trx/burst_queue.c **** 		bq->head[head] = s;
+ 385              		.loc 1 136 0
+ 386 0148 B86082E1 		strh	r6, [r2, r8]	@ movhi
+ 387 014c 230000EA 		b	.L27
+ 388              	.LVL35:
+ 389              	.L41:
+ 390              	.LBB17:
+ 145:apps/trx/burst_queue.c **** 
+ 146:apps/trx/burst_queue.c **** 		while ((n != 0xffff) &&
+ 147:apps/trx/burst_queue.c **** 		       (fn_cmp(fn, bq->slots[n].fn) > 0))
+ 391              		.loc 1 147 0 discriminator 2
+ 392 0150 9B0803E0 		mul	r3, fp, r8
+ 393 0154 039084E0 		add	r9, r4, r3
+ 394 0158 0120D9E5 		ldrb	r2, [r9, #1]	@ zero_extendqisi2
+ 395 015c 0330D4E7 		ldrb	r3, [r4, r3]	@ zero_extendqisi2
+ 396 0160 023483E1 		orr	r3, r3, r2, asl #8
+ 397 0164 0220D9E5 		ldrb	r2, [r9, #2]	@ zero_extendqisi2
+ 398 0168 0310D9E5 		ldrb	r1, [r9, #3]	@ zero_extendqisi2
+ 399 016c 023883E1 		orr	r3, r3, r2, asl #16
+ 400 0170 0500A0E1 		mov	r0, r5
+ 401 0174 011C83E1 		orr	r1, r3, r1, asl #24
+ 402 0178 FEFFFFEB 		bl	fn_cmp
+ 403              	.LVL36:
+ 146:apps/trx/burst_queue.c **** 		while ((n != 0xffff) &&
+ 404              		.loc 1 146 0 discriminator 2
+ 405 017c 000050E3 		cmp	r0, #0
+ 406 0180 050000DA 		ble	.L29
+ 407              	.LVL37:
+ 148:apps/trx/burst_queue.c **** 		{
+ 149:apps/trx/burst_queue.c **** 			c = n;
+ 150:apps/trx/burst_queue.c **** 			n = bq->slots[c].next;
+ 408              		.loc 1 150 0
+ 409 0184 0430D9E5 		ldrb	r3, [r9, #4]	@ zero_extendqisi2
+ 410 0188 0520D9E5 		ldrb	r2, [r9, #5]	@ zero_extendqisi2
+ 411              	.LVL38:
+ 412 018c 0870A0E1 		mov	r7, r8
+ 413 0190 028483E1 		orr	r8, r3, r2, asl #8
+ 414              	.LVL39:
+ 415              	.L28:
+ 146:apps/trx/burst_queue.c **** 		while ((n != 0xffff) &&
+ 416              		.loc 1 146 0 discriminator 1
+ 417 0194 0A0058E1 		cmp	r8, r10
+ 418 0198 ECFFFF1A 		bne	.L41
+ 419              	.L29:
+ 151:apps/trx/burst_queue.c **** 		}
+ 152:apps/trx/burst_queue.c **** 
+ 153:apps/trx/burst_queue.c **** 		bq->slots[s].fn = fn;
+ 420              		.loc 1 153 0
+ 421 019c 1620A0E3 		mov	r2, #22
+ 422 01a0 920601E0 		mul	r1, r2, r6
+ 154:apps/trx/burst_queue.c **** 		bq->slots[s].next = n;
+ 155:apps/trx/burst_queue.c **** 		bq->slots[c].next = s;
+ 423              		.loc 1 155 0
+ 424 01a4 924727E0 		mla	r7, r2, r7, r4
+ 153:apps/trx/burst_queue.c **** 		bq->slots[s].fn = fn;
+ 425              		.loc 1 153 0
+ 426 01a8 0150C4E7 		strb	r5, [r4, r1]
+ 427 01ac 013084E0 		add	r3, r4, r1
+ 428 01b0 2514A0E1 		mov	r1, r5, lsr #8
+ 429 01b4 0110C3E5 		strb	r1, [r3, #1]
+ 154:apps/trx/burst_queue.c **** 		bq->slots[s].next = n;
+ 430              		.loc 1 154 0
+ 431 01b8 0480C3E5 		strb	r8, [r3, #4]
+ 153:apps/trx/burst_queue.c **** 		bq->slots[s].fn = fn;
+ 432              		.loc 1 153 0
+ 433 01bc 2518A0E1 		mov	r1, r5, lsr #16
+ 154:apps/trx/burst_queue.c **** 		bq->slots[s].next = n;
+ 434              		.loc 1 154 0
+ 435 01c0 2884A0E1 		mov	r8, r8, lsr #8
+ 436              	.LVL40:
+ 153:apps/trx/burst_queue.c **** 		bq->slots[s].fn = fn;
+ 437              		.loc 1 153 0
+ 438 01c4 255CA0E1 		mov	r5, r5, lsr #24
+ 439              	.LVL41:
+ 440 01c8 0210C3E5 		strb	r1, [r3, #2]
+ 441 01cc 0350C3E5 		strb	r5, [r3, #3]
+ 154:apps/trx/burst_queue.c **** 		bq->slots[s].next = n;
+ 442              		.loc 1 154 0
+ 443 01d0 0580C3E5 		strb	r8, [r3, #5]
+ 444              		.loc 1 155 0
+ 445 01d4 2634A0E1 		mov	r3, r6, lsr #8
+ 446 01d8 0460C7E5 		strb	r6, [r7, #4]
+ 447 01dc 0530C7E5 		strb	r3, [r7, #5]
+ 448              	.L27:
+ 449              	.LBE17:
+ 156:apps/trx/burst_queue.c **** 	}
+ 157:apps/trx/burst_queue.c **** 
+ 158:apps/trx/burst_queue.c **** 	/* Done */
+ 159:apps/trx/burst_queue.c **** 	return &bq->slots[s].data;
+ 450              		.loc 1 159 0
+ 451 01e0 1600A0E3 		mov	r0, #22
+ 452 01e4 904624E0 		mla	r4, r0, r6, r4
+ 453 01e8 060084E2 		add	r0, r4, #6
+ 454              	.LVL42:
+ 455              	.L22:
+ 160:apps/trx/burst_queue.c **** }
+ 456              		.loc 1 160 0
+ 457 01ec 0CD08DE2 		add	sp, sp, #12
+ 458              		@ sp needed
+ 459 01f0 F04FBDE8 		ldmfd	sp!, {r4, r5, r6, r7, r8, r9, r10, fp, lr}
+ 460 01f4 1EFF2FE1 		bx	lr
+ 461              	.L43:
+ 462              		.align	2
+ 463              	.L42:
+ 464 01f8 FFFF0000 		.word	65535
+ 465              		.cfi_endproc
+ 466              	.LFE7:
+ 468              		.section	.text.bq_pop_head,"ax",%progbits
+ 469              		.align	2
+ 470              		.global	bq_pop_head
+ 472              	bq_pop_head:
+ 473              	.LFB8:
+ 161:apps/trx/burst_queue.c **** 
+ 162:apps/trx/burst_queue.c **** /* Data remains valid until the next bq_push call */
+ 163:apps/trx/burst_queue.c **** struct burst_data *
+ 164:apps/trx/burst_queue.c **** bq_pop_head(struct burst_queue *bq, int head, uint32_t fn)
+ 165:apps/trx/burst_queue.c **** {
+ 474              		.loc 1 165 0
+ 475              		.cfi_startproc
+ 476              		@ Function supports interworking.
+ 477              		@ args = 0, pretend = 0, frame = 16
+ 478              		@ frame_needed = 0, uses_anonymous_args = 0
+ 479              	.LVL43:
+ 480 0000 F04F2DE9 		stmfd	sp!, {r4, r5, r6, r7, r8, r9, r10, fp, lr}
+ 481              	.LCFI3:
+ 482              		.cfi_def_cfa_offset 36
+ 483              		.cfi_offset 4, -36
+ 484              		.cfi_offset 5, -32
+ 485              		.cfi_offset 6, -28
+ 486              		.cfi_offset 7, -24
+ 487              		.cfi_offset 8, -20
+ 488              		.cfi_offset 9, -16
+ 489              		.cfi_offset 10, -12
+ 490              		.cfi_offset 11, -8
+ 491              		.cfi_offset 14, -4
+ 166:apps/trx/burst_queue.c **** 	uint16_t h;
+ 167:apps/trx/burst_queue.c **** 
+ 168:apps/trx/burst_queue.c **** 	/* Flush any pending burst < fn */
+ 169:apps/trx/burst_queue.c **** 	while ((bq->head[head] != 0xffff) &&
+ 492              		.loc 1 169 0
+ 493 0004 F8B09FE5 		ldr	fp, .L60
+ 165:apps/trx/burst_queue.c **** {
+ 494              		.loc 1 165 0
+ 495 0008 14D04DE2 		sub	sp, sp, #20
+ 496              	.LCFI4:
+ 497              		.cfi_def_cfa_offset 56
+ 165:apps/trx/burst_queue.c **** {
+ 498              		.loc 1 165 0
+ 499 000c 0040A0E1 		mov	r4, r0
+ 500 0010 0190A0E1 		mov	r9, r1
+ 501 0014 0280A0E1 		mov	r8, r2
+ 502              		.loc 1 169 0
+ 503 0018 8170A0E1 		mov	r7, r1, asl #1
+ 170:apps/trx/burst_queue.c **** 	       (fn_cmp(bq->slots[bq->head[head]].fn, fn) < 0))
+ 504              		.loc 1 170 0
+ 505 001c 16A0A0E3 		mov	r10, #22
+ 506              	.LVL44:
+ 507              	.L45:
+ 169:apps/trx/burst_queue.c **** 	while ((bq->head[head] != 0xffff) &&
+ 508              		.loc 1 169 0 discriminator 1
+ 509 0020 143094E5 		ldr	r3, [r4, #20]
+ 510 0024 B76093E1 		ldrh	r6, [r3, r7]
+ 511 0028 0B0056E1 		cmp	r6, fp
+ 512 002c 07C083E0 		add	ip, r3, r7
+ 513 0030 2200000A 		beq	.L52
+ 514              		.loc 1 170 0 discriminator 2
+ 515 0034 9A0605E0 		mul	r5, r10, r6
+ 516 0038 1C2094E5 		ldr	r2, [r4, #28]
+ 517 003c 053082E0 		add	r3, r2, r5
+ 518 0040 0110D3E5 		ldrb	r1, [r3, #1]	@ zero_extendqisi2
+ 519 0044 0520D2E7 		ldrb	r2, [r2, r5]	@ zero_extendqisi2
+ 520 0048 012482E1 		orr	r2, r2, r1, asl #8
+ 521 004c 0210D3E5 		ldrb	r1, [r3, #2]	@ zero_extendqisi2
+ 522 0050 012882E1 		orr	r2, r2, r1, asl #16
+ 523 0054 0310D3E5 		ldrb	r1, [r3, #3]	@ zero_extendqisi2
+ 524 0058 012C82E1 		orr	r2, r2, r1, asl #24
+ 525 005c 0200A0E1 		mov	r0, r2
+ 526 0060 0810A0E1 		mov	r1, r8
+ 527 0064 0C108DE9 		stmib	sp, {r2, r3, ip}
+ 528 0068 FEFFFFEB 		bl	fn_cmp
+ 529              	.LVL45:
+ 169:apps/trx/burst_queue.c **** 	while ((bq->head[head] != 0xffff) &&
+ 530              		.loc 1 169 0 discriminator 2
+ 531 006c 000050E3 		cmp	r0, #0
+ 532 0070 0C109DE9 		ldmib	sp, {r2, r3, ip}
+ 533 0074 130000AA 		bge	.L59
+ 534              	.LVL46:
+ 171:apps/trx/burst_queue.c **** 	{
+ 172:apps/trx/burst_queue.c **** 		h = bq->head[head];
+ 173:apps/trx/burst_queue.c **** 
+ 174:apps/trx/burst_queue.c **** 		if (bq->cb) {
+ 535              		.loc 1 174 0
+ 536 0078 0CC094E5 		ldr	ip, [r4, #12]
+ 537 007c 00005CE3 		cmp	ip, #0
+ 175:apps/trx/burst_queue.c **** 			bq->cb(&bq->slots[h].data,
+ 538              		.loc 1 175 0
+ 539 0080 06008312 		addne	r0, r3, #6
+ 540 0084 0910A011 		movne	r1, r9
+ 541 0088 10309415 		ldrne	r3, [r4, #16]
+ 542 008c 0FE0A011 		movne	lr, pc
+ 543 0090 1CFF2F11 		bxne	ip
+ 544              	.LVL47:
+ 545              	.L46:
+ 176:apps/trx/burst_queue.c **** 			       head, bq->slots[h].fn, bq->cb_data);
+ 177:apps/trx/burst_queue.c **** 		}
+ 178:apps/trx/burst_queue.c **** 
+ 179:apps/trx/burst_queue.c **** 		bq->head[head] = bq->slots[h].next;
+ 546              		.loc 1 179 0
+ 547 0094 1C3094E5 		ldr	r3, [r4, #28]
+ 548 0098 055083E0 		add	r5, r3, r5
+ 549 009c 0430D5E5 		ldrb	r3, [r5, #4]	@ zero_extendqisi2
+ 550 00a0 0520D5E5 		ldrb	r2, [r5, #5]	@ zero_extendqisi2
+ 551 00a4 022483E1 		orr	r2, r3, r2, asl #8
+ 552 00a8 143094E5 		ldr	r3, [r4, #20]
+ 180:apps/trx/burst_queue.c **** 		bq_free_slot(bq, h);
+ 553              		.loc 1 180 0
+ 554 00ac 0400A0E1 		mov	r0, r4
+ 179:apps/trx/burst_queue.c **** 		bq->head[head] = bq->slots[h].next;
+ 555              		.loc 1 179 0
+ 556 00b0 B72083E1 		strh	r2, [r3, r7]	@ movhi
+ 557              		.loc 1 180 0
+ 558 00b4 0610A0E1 		mov	r1, r6
+ 559 00b8 FEFFFFEB 		bl	bq_free_slot
+ 560              	.LVL48:
+ 561 00bc D7FFFFEA 		b	.L45
+ 562              	.LVL49:
+ 563              	.L52:
+ 181:apps/trx/burst_queue.c **** 	}
+ 182:apps/trx/burst_queue.c **** 
+ 183:apps/trx/burst_queue.c **** 	/* Are we a match ? */
+ 184:apps/trx/burst_queue.c **** 	h = bq->head[head];
+ 185:apps/trx/burst_queue.c **** 
+ 186:apps/trx/burst_queue.c **** 	if (h == 0xffff || bq->slots[h].fn != fn)
+ 187:apps/trx/burst_queue.c **** 		return NULL;
+ 564              		.loc 1 187 0
+ 565 00c0 0000A0E3 		mov	r0, #0
+ 566 00c4 0B0000EA 		b	.L57
+ 567              	.L59:
+ 568              	.LVL50:
+ 186:apps/trx/burst_queue.c **** 	if (h == 0xffff || bq->slots[h].fn != fn)
+ 569              		.loc 1 186 0
+ 570 00c8 080052E1 		cmp	r2, r8
+ 571 00cc FBFFFF1A 		bne	.L52
+ 188:apps/trx/burst_queue.c **** 
+ 189:apps/trx/burst_queue.c **** 	/* Remove it */
+ 190:apps/trx/burst_queue.c **** 	bq->head[head] = bq->slots[h].next;
+ 572              		.loc 1 190 0
+ 573 00d0 0420D3E5 		ldrb	r2, [r3, #4]	@ zero_extendqisi2
+ 574 00d4 0530D3E5 		ldrb	r3, [r3, #5]	@ zero_extendqisi2
+ 575 00d8 033482E1 		orr	r3, r2, r3, asl #8
+ 191:apps/trx/burst_queue.c **** 	bq_free_slot(bq, h);
+ 576              		.loc 1 191 0
+ 577 00dc 0400A0E1 		mov	r0, r4
+ 190:apps/trx/burst_queue.c **** 	bq->head[head] = bq->slots[h].next;
+ 578              		.loc 1 190 0
+ 579 00e0 B030CCE1 		strh	r3, [ip]	@ movhi
+ 580              		.loc 1 191 0
+ 581 00e4 0610A0E1 		mov	r1, r6
+ 582 00e8 FEFFFFEB 		bl	bq_free_slot
+ 583              	.LVL51:
+ 192:apps/trx/burst_queue.c **** 
+ 193:apps/trx/burst_queue.c **** 	/* Return matching result */
+ 194:apps/trx/burst_queue.c **** 	return &bq->slots[h].data;
+ 584              		.loc 1 194 0
+ 585 00ec 1C0094E5 		ldr	r0, [r4, #28]
+ 586 00f0 055080E0 		add	r5, r0, r5
+ 587 00f4 060085E2 		add	r0, r5, #6
+ 588              	.LVL52:
+ 589              	.L57:
+ 195:apps/trx/burst_queue.c **** }
+ 590              		.loc 1 195 0
+ 591 00f8 14D08DE2 		add	sp, sp, #20
+ 592              		@ sp needed
+ 593 00fc F04FBDE8 		ldmfd	sp!, {r4, r5, r6, r7, r8, r9, r10, fp, lr}
+ 594              	.LVL53:
+ 595 0100 1EFF2FE1 		bx	lr
+ 596              	.L61:
+ 597              		.align	2
+ 598              	.L60:
+ 599 0104 FFFF0000 		.word	65535
+ 600              		.cfi_endproc
+ 601              	.LFE8:
+ 603              		.text
+ 604              	.Letext0:
+ 605              		.file 2 "/opt/arm/install/arm-none-eabi/sys-include/stdint.h"
+ 606              		.file 3 "apps/trx/burst_queue.h"
+DEFINED SYMBOLS
+                            *ABS*:00000000 burst_queue.c
+     /tmp/cchUcS2i.s:17     .text.fn_cmp:00000000 $a
+     /tmp/cchUcS2i.s:19     .text.fn_cmp:00000000 fn_cmp
+     /tmp/cchUcS2i.s:64     .text.fn_cmp:0000004c $d
+     /tmp/cchUcS2i.s:70     .text.bq_free_slot:00000000 $a
+     /tmp/cchUcS2i.s:72     .text.bq_free_slot:00000000 bq_free_slot
+     /tmp/cchUcS2i.s:107    .text.bq_reset:00000000 $a
+     /tmp/cchUcS2i.s:110    .text.bq_reset:00000000 bq_reset
+     /tmp/cchUcS2i.s:170    .text.bq_set_discard_fn:00000000 $a
+     /tmp/cchUcS2i.s:173    .text.bq_set_discard_fn:00000000 bq_set_discard_fn
+     /tmp/cchUcS2i.s:191    .text.bq_push:00000000 $a
+     /tmp/cchUcS2i.s:194    .text.bq_push:00000000 bq_push
+     /tmp/cchUcS2i.s:464    .text.bq_push:000001f8 $d
+     /tmp/cchUcS2i.s:469    .text.bq_pop_head:00000000 $a
+     /tmp/cchUcS2i.s:472    .text.bq_pop_head:00000000 bq_pop_head
+     /tmp/cchUcS2i.s:599    .text.bq_pop_head:00000104 $d
+                     .debug_frame:00000010 $d
+
+UNDEFINED SYMBOLS
+memset
