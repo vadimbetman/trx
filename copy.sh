@@ -12,5 +12,5 @@ if [ -d $DIR_TRX ];
 then
 cp apps/trx/main.c $DIR_TRX/main.c
 else
-echo "Нет дериктории $DIR_TRX"
+echo "РќРµС‚ РґРµСЂРёРєС‚РѕСЂРёРё $DIR_TRX"
 fi
