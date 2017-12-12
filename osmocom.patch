@@ -1,0 +1,125 @@
+--- src/host/osmocon/osmocon.c	2017-12-12 03:34:12.136174300 +0200
++++ src/host/osmocon/osmocon.c	2017-12-12 05:49:44.059293700 +0200
+@@ -1004,6 +1004,7 @@
+ 			dnload.mode = dnload.previous_mode;
+ 			dnload.romload_state = WAITING_IDENTIFICATION;
+ 			osmo_serial_set_baudrate(dnload.serial_fd.fd, MODEM_BAUDRATE);
++			serial_up_to_eleven();
+ 		} else if (!memcmp(buffer, romload_branch_nack,
+ 			   sizeof(romload_branch_nack))) {
+ 			printf("Received branch nack, aborting\n");
+--- src/host/layer23/src/misc/app_cell_log.c	2017-12-12 05:09:49.054307200 +0200
++++ src/host/layer23/src/misc/app_cell_log.c	2017-12-12 05:16:24.093902200 +0200
+@@ -44,6 +44,8 @@
+ extern uint16_t (*band_range)[][2];
+ 
+ char *logname = "/var/log/osmocom.log";
++int scan_from = -1;
++int scan_to = -1;
+ int RACH_MAX = 2;
+ 
+ int _scan_work(struct osmocom_ms *ms)
+@@ -161,6 +163,8 @@
+ 	printf("  -p --port PORT	2947. gpsd port\n");
+ 	printf("  -f --gps DEVICE	/dev/ttyACM0. GPS serial device.\n");
+ 	printf("  -b --baud BAUDRAT	The baud rate of the GPS device\n");
++	printf("  -e ARFCN		Start scan at ARFCN\n");
++	printf("  -t ARFCN		Stop scan at ARFCN\n");
+ 	printf("  -A --arfcns ARFCNS    The list of arfcns to be monitored\n");
+ 
+ 	return 0;
+@@ -224,6 +228,12 @@
+ 		parse_band_range((char*)optarg);
+ 		printf("New frequencies range: %s\n", print_band_range(*band_range, buf, sizeof(buf)));
+ 		break;
++	case 'e':
++		scan_from = atoi(optarg);
++		break;
++	case 't':
++		scan_to = atoi(optarg);
++		break;
+ 	}
+ 	return 0;
+ 
+@@ -234,7 +244,7 @@
+ 
+ static struct l23_app_info info = {
+ 	.copyright	= "Copyright (C) 2010 Andreas Eversberg\n",
+-	.getopt_string	= "g:p:l:r:nf:b:A:",
++	.getopt_string	= "g:p:l:r:nf:b:A:e:t:",
+ 	.cfg_supported	= l23_cfg_supported,
+ 	.cfg_getopt_opt = l23_getopt_options,
+ 	.cfg_handle_opt	= l23_cfg_handle,
+--- src/host/layer23/src/misc/cell_log.c	2017-12-12 05:20:51.643205100 +0200
++++ src/host/layer23/src/misc/cell_log.c	2017-12-12 05:27:32.022105500 +0200
+@@ -89,7 +89,8 @@
+ static FILE *logfp = NULL;
+ extern char *logname;
+ extern int RACH_MAX;
+-
++extern int scan_from;
++extern int scan_to;
+ 
+ static struct gsm48_sysinfo sysinfo;
+ 
+@@ -349,12 +350,30 @@
+ 
+ static void start_pm(void)
+ {
+-	uint16_t from, to;
++	uint16_t from = 0, to = 0;
+ 
+ 	state = SCAN_STATE_PM;
+ 	from = (*band_range)[pm_index][0];
+ 	to = (*band_range)[pm_index][1];
+ 
++	if(scan_from == -1 && scan_to == -1) { // no user range set
++		from = band_range[pm_index][0];
++		to = band_range[pm_index][1];
++	}
++	if((scan_from == -1 && scan_to != -1) || (scan_from != -1 && scan_to == -1)) {
++		// br0ken settings given
++		printf("Both or none scan_from/scan_to must be set! Aborting!\n");
++		exit(42);
++	}
++	if(scan_from > -1 && scan_to > -1) {
++		from = scan_from;
++		to = scan_to;
++		scan_from = 0; scan_to = 0;
++	}
++	if((scan_from == -2 && scan_to == -2)) { // scan already performed
++		exit(0); // XXX soo dirty /o\ :-(
++	}
++
+ 	if (from == 0 && to == 0) {
+ 		LOGP(DSUM, LOGL_INFO, "Measurement done\n");
+ 		pm_gps_valid = g.enable && g.valid;
+@@ -363,6 +382,7 @@
+ 				g.longitude, g.latitude);
+ 		log_pm();
+ 		start_sync();
++		scan_from = -2; scan_to = -2;
+ 		return;
+ 	}
+ 	LOGP(DSUM, LOGL_INFO, "Measure from %d to %d\n", from, to);
+--- src/target/firmware/layer1/l23_api.c	2017-12-12 05:39:31.383250600 +0200
++++ src/target/firmware/layer1/l23_api.c	2017-12-12 05:39:47.004144100 +0200
+@@ -433,6 +433,7 @@
+ 	switch (reset_req->type) {
+ 	case L1CTL_RES_T_FULL:
+ 		printf("L1CTL_RESET_REQ: FULL!\n");
++		dsp_power_on();
+ 		l1s_reset();
+ 		l1s_reset_hw();
+ 		audio_set_enabled(GSM48_CMODE_SIGN, 0);
+--- src/shared/libosmocore/src/gsm/lapd_core.c	2017-12-12 05:43:35.071188800 +0200
++++ src/shared/libosmocore/src/gsm/lapd_core.c	2017-12-12 05:45:28.756691200 +0200
+@@ -1576,6 +1576,8 @@
+ 	} else
+ 		LOGP(DLLAPD, LOGL_INFO, "I frame ignored during own receiver "
+ 			"busy condition\n");
++ 
++	return 0;
+ 
+ 	/* Check for P bit */
+ 	if (lctx->p_f) {

@@ -14,4 +14,3 @@ cp apps/trx/main.c $DIR_TRX/main.c
 else
 echo "Нет дериктории $DIR_TRX"
 fi
-
